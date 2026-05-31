@@ -1131,7 +1131,7 @@ const App = () => {
   };
 
   useEffect(() => {
-    const initAuth = async () => { try { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } } catch (err) {} };
+    const initAuth = async () => { try { await signInAnonymously(auth); } catch (err) {} };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => { setUser(authUser); setLoading(false); });
     return () => unsubscribe();
