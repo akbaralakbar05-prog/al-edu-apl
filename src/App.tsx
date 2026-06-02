@@ -36,8 +36,7 @@ const getUserCollection = (userId, collectionName) => collection(db, 'artifacts'
 
 // --- Gemini API Helper ---
 const callGeminiAPI = async (prompt, systemInstruction = "", useJson = false, jsonSchema = null, imageBase64 = null, imageMimeType = null) => {
-  const apiKey = "AIzaSyAEyNfFSaHXfchFc2CLFoLwNmJ9Bfl2jbg"; 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `/api/gemini`;
 
   // Gambar/dokumen harus di-push SEBELUM teks
   const parts = [];
@@ -65,7 +64,7 @@ PENTING: Balas HANYA dengan JSON valid, tanpa penjelasan, tanpa markdown, tanpa 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ model: 'gemini-1.5-flash', payload })
       });
       if (!response.ok) {
         const errBody = await response.json().catch(() => ({}));
@@ -827,8 +826,7 @@ const MateriDetail = () => {
 
 // Helper: Kirim percakapan multi-turn ke Gemini dengan riwayat lengkap
 const callGeminiChat = async (chatHistory, newUserText, imageBase64 = null, imageMimeType = null) => {
-  const apiKey = "AIzaSyAEyNfFSaHXfchFc2CLFoLwNmJ9Bfl2jbg";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `/api/gemini`;
 
   // Bangun riwayat percakapan dalam format Gemini (role: user/model)
   const contents = chatHistory.map(msg => ({
@@ -856,7 +854,7 @@ const callGeminiChat = async (chatHistory, newUserText, imageBase64 = null, imag
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({ model: 'gemini-1.5-flash', payload })
   });
 
   if (!response.ok) {
