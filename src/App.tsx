@@ -37,17 +37,27 @@ const getUserCollection = (userId, collectionName) => collection(db, 'artifacts'
 // --- Gemini API Helper ---
 const callGeminiAPI = async (prompt, systemInstruction = "", useJson = false, jsonSchema = null, imageBase64 = null, imageMimeType = null) => {
   const apiKey = "AIzaSyAEyNfFSaHXfchFc2CLFoLwNmJ9Bfl2jbg"; 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-  const parts = [{ text: prompt }];
+  // Gambar/dokumen harus di-push SEBELUM teks
+  const parts = [];
   if (imageBase64 && imageMimeType) {
-    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
     parts.push({ inlineData: { mimeType: imageMimeType, data: base64Data } });
   }
 
+  // Jika butuh JSON, tambahkan instruksi di prompt (lebih stabil dari responseSchema)
+  const finalPrompt = useJson
+    ? prompt + `
+
+PENTING: Balas HANYA dengan JSON valid, tanpa penjelasan, tanpa markdown, tanpa backtick.`
+    : prompt;
+  parts.push({ text: finalPrompt });
+
   const payload = { contents: [{ parts }] };
   if (systemInstruction) payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-  if (useJson && jsonSchema) payload.generationConfig = { responseMimeType: "application/json", responseSchema: jsonSchema };
+  // Hanya pakai responseMimeType tanpa responseSchema (lebih kompatibel)
+  if (useJson) payload.generationConfig = { responseMimeType: "application/json", temperature: 0.3 };
 
   const delays = [1000, 2000, 4000, 8000, 16000];
   for (let i = 0; i < 6; i++) {
@@ -57,14 +67,33 @@ const callGeminiAPI = async (prompt, systemInstruction = "", useJson = false, js
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!response.ok) throw new Error("API Error");
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const msg = errBody?.error?.message || `HTTP ${response.status}`;
+        throw new Error(msg);
+      }
       const result = await response.json();
-      return result.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error("Respons AI kosong");
+      return text;
     } catch (error) {
-      if (i === 5) throw new Error("Gagal menghubungi asisten AI.");
+      if (i === 5) throw new Error("Gagal: " + error.message);
       await new Promise(res => setTimeout(res, delays[i]));
     }
   }
+};
+
+// Helper: bersihkan dan parse JSON dari respons Gemini
+const parseGeminiJSON = (text) => {
+  if (!text) throw new Error("Teks kosong");
+  // Hapus markdown backtick jika ada
+  let clean = text.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
+  // Coba parse langsung
+  try { return JSON.parse(clean); } catch(e) {}
+  // Coba ekstrak JSON dari dalam teks
+  const match = clean.match(/[\[\{][\s\S]*[\]\}]/);
+  if (match) return JSON.parse(match[0]);
+  throw new Error("Format JSON tidak valid");
 };
 
 // Toast Notification System
@@ -599,7 +628,7 @@ const BankSoalGuru = () => {
         <Button onClick={() => setIsAdding(!isAdding)} icon={isAdding ? X : Plus}>{isAdding ? 'Batal' : 'Unggah Bank Soal'}</Button>
       </div>
 
-      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.txt" className="hidden" />
+      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp" className="hidden" />
 
       {isAdding && (
         <Card className="border-orange-200 shadow-lg animate-fade-in-up">
@@ -796,45 +825,191 @@ const MateriDetail = () => {
   );
 };
 
+// Helper: Kirim percakapan multi-turn ke Gemini dengan riwayat lengkap
+const callGeminiChat = async (chatHistory, newUserText, imageBase64 = null, imageMimeType = null) => {
+  const apiKey = "AIzaSyAEyNfFSaHXfchFc2CLFoLwNmJ9Bfl2jbg";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+  // Bangun riwayat percakapan dalam format Gemini (role: user/model)
+  const contents = chatHistory.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.text }]
+  }));
+
+  // Tambah pesan user terbaru (dengan gambar jika ada)
+  const newParts = [];
+  if (imageBase64 && imageMimeType) {
+    const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    newParts.push({ inlineData: { mimeType: imageMimeType, data: base64Data } });
+  }
+  newParts.push({ text: newUserText });
+  contents.push({ role: 'user', parts: newParts });
+
+  const payload = {
+    contents,
+    systemInstruction: {
+      parts: [{ text: "Anda adalah AL-AI Tutor, asisten matematika cerdas untuk platform AL Edu UNM. Jawab pertanyaan matematika dengan jelas, langkah demi langkah, dan gunakan bahasa Indonesia yang mudah dipahami siswa. Jika ada gambar soal, analisis dan selesaikan soal tersebut." }]
+    },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${response.status}`);
+  }
+  const result = await response.json();
+  const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Respons AI kosong");
+  return text;
+};
+
 const AITutor = () => {
-  const [messages, setMessages] = useState([{ role: 'ai', text: 'Halo! Saya AL-AI Tutor platform belajar UNM. Ada konsep matematika yang ingin ditanyakan?' }]);
+  const INITIAL_MSG = { role: 'ai', text: 'Halo! Saya **AL-AI Tutor** siap membantu kamu belajar matematika. 📐\n\nKamu bisa:\n• Tanyakan konsep atau rumus apapun\n• Upload foto soal untuk dibantu penyelesaiannya\n• Minta penjelasan langkah demi langkah\n\nAda yang ingin ditanyakan?' };
+  const [messages, setMessages] = useState([INITIAL_MSG]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageData, setImageData] = useState(null);
+  const [imageMime, setImageMime] = useState(null);
   const messagesEndRef = useRef(null);
+  const imageInputRef = useRef(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isTyping]);
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setImagePreview(ev.target.result);
+      setImageData(ev.target.result);
+      setImageMime(file.type);
+    };
+    reader.readAsDataURL(file);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
   const handleSend = async () => {
-    if (!input.trim()) return;
-    const userMsg = input; setInput(''); setMessages(p => [...p, { role: 'user', text: userMsg }]); setIsTyping(true);
+    const text = input.trim();
+    if (!text && !imageData) return;
+
+    const displayText = text || '📷 (Foto soal)';
+    const userMsg = { role: 'user', text: displayText, imagePreview: imagePreview };
+    
+    // Ambil riwayat chat (kecuali pesan AI pertama/pembuka & pesan dengan gambar)
+    const historyForApi = messages
+      .filter(m => m !== INITIAL_MSG)
+      .map(m => ({ role: m.role, text: m.text }));
+
+    setMessages(p => [...p, userMsg]);
+    setInput('');
+    setImagePreview(null);
+    const sentImageData = imageData;
+    const sentImageMime = imageMime;
+    setImageData(null);
+    setImageMime(null);
+    setIsTyping(true);
+
     try {
-      const aiText = await callGeminiAPI(userMsg, "Anda adalah AL-AI Tutor, guru matematika ahli.");
+      const aiText = await callGeminiChat(historyForApi, text || 'Tolong analisis dan selesaikan soal pada gambar ini.', sentImageData, sentImageMime);
       setMessages(p => [...p, { role: 'ai', text: aiText }]);
-    } catch (e) { setMessages(p => [...p, { role: 'ai', text: "Maaf, koneksi gagal." }]); } finally { setIsTyping(false); }
+    } catch (e) {
+      console.error('AI Tutor error:', e);
+      setMessages(p => [...p, { role: 'ai', text: `Maaf, terjadi kesalahan: ${e.message}. Coba kirim ulang pertanyaanmu.` }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const renderText = (text) => {
+    if (!text) return null;
+    return text.split('\n').map((line, i) => {
+      const clean = line.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+      if (clean.startsWith('• ') || clean.startsWith('- ')) return <li key={i} className="ml-4 list-disc mb-1">{clean.slice(2)}</li>;
+      if (clean.trim() === '') return <br key={i} />;
+      return <p key={i} className="mb-1 leading-relaxed">{clean}</p>;
+    });
   };
 
   return (
-    <Card className="h-[80vh] flex flex-col p-0 overflow-hidden border-2 border-orange-100 shadow-xl bg-white/95">
-      <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-4 flex items-center gap-3 text-white">
-        <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center"><BrainCircuit size={28} className="text-white" /></div>
-        <div><h3 className="font-bold text-lg">AL-AI Tutor</h3><p className="text-orange-100 text-sm flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Online</p></div>
+    <Card className="h-[85vh] flex flex-col p-0 overflow-hidden border-2 border-orange-100 shadow-xl bg-white/95">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-4 flex items-center justify-between text-white shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center"><BrainCircuit size={28} className="text-white" /></div>
+          <div>
+            <h3 className="font-bold text-lg">AL-AI Tutor</h3>
+            <p className="text-orange-100 text-xs flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"></span> Siap membantu 24/7
+            </p>
+          </div>
+        </div>
+        <button onClick={() => setMessages([INITIAL_MSG])} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg font-medium transition">Reset Chat</button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50/50">
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/50">
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] md:max-w-[70%] rounded-2xl p-4 shadow-sm ${msg.role === 'user' ? 'bg-orange-500 text-white rounded-br-none' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'}`}>
-              <p className="whitespace-pre-wrap leading-relaxed text-sm md:text-base">{msg.text}</p>
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+            {msg.role === 'ai' && (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mb-1">AL</div>
+            )}
+            <div className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-4 py-3 shadow-sm text-sm md:text-base ${msg.role === 'user' ? 'bg-orange-500 text-white rounded-br-none' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'}`}>
+              {msg.imagePreview && <img src={msg.imagePreview} alt="soal" className="rounded-lg mb-2 max-h-40 object-contain" />}
+              <div className="whitespace-pre-wrap leading-relaxed">{renderText(msg.text)}</div>
             </div>
           </div>
         ))}
-        {isTyping && <div className="flex justify-start"><div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex gap-1"><span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"></span><span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce delay-75"></span><span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce delay-150"></span></div></div>}
+        {isTyping && (
+          <div className="flex justify-start items-end gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-xs font-bold shrink-0">AL</div>
+            <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm flex gap-1 items-center">
+              <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"></span>
+              <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{animationDelay:'0.15s'}}></span>
+              <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{animationDelay:'0.3s'}}></span>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="p-4 bg-white border-t border-slate-100">
-        <div className="flex gap-2 max-w-4xl mx-auto">
-          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} placeholder="Tanyakan rumus matematika..." className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500" />
-          <Button onClick={handleSend} disabled={isTyping} className="rounded-xl px-4 shadow-md"><Send size={20} /></Button>
+
+      {/* Image preview strip */}
+      {imagePreview && (
+        <div className="px-4 py-2 bg-orange-50 border-t border-orange-100 flex items-center gap-3 shrink-0">
+          <img src={imagePreview} alt="preview" className="h-16 w-16 object-cover rounded-lg border border-orange-200" />
+          <div className="flex-1"><p className="text-xs font-semibold text-slate-700">Foto soal siap dikirim</p><p className="text-xs text-slate-500">Tambahkan pertanyaan jika perlu, lalu tekan Kirim</p></div>
+          <button onClick={() => { setImagePreview(null); setImageData(null); setImageMime(null); }} className="p-1.5 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200"><X size={16}/></button>
         </div>
+      )}
+
+      {/* Input area */}
+      <div className="p-3 sm:p-4 bg-white border-t border-slate-100 shrink-0">
+        <div className="flex gap-2 max-w-4xl mx-auto items-end">
+          <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageSelect} className="hidden" />
+          <button onClick={() => imageInputRef.current?.click()} title="Upload foto soal" className="p-3 text-orange-500 hover:bg-orange-50 rounded-xl transition shrink-0 border border-orange-100">
+            <Camera size={20} />
+          </button>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="Tanyakan rumus, konsep, atau upload foto soal... (Enter kirim, Shift+Enter baris baru)"
+            rows={1}
+            className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 resize-none text-sm leading-relaxed"
+            style={{ minHeight: '48px', maxHeight: '120px' }}
+          />
+          <Button onClick={handleSend} disabled={isTyping || (!input.trim() && !imageData)} className="rounded-xl px-4 shadow-md shrink-0">
+            <Send size={18} />
+          </Button>
+        </div>
+        <p className="text-center text-xs text-slate-400 mt-2">AL-AI Tutor menggunakan Gemini AI · Jawaban mungkin tidak sempurna</p>
       </div>
     </Card>
   );
@@ -869,16 +1044,62 @@ const KelolaMateri = () => {
     if (!file) return;
     if (file.size > 700 * 1024) { showToast('Maks 700 KB!', 'error'); return; }
     setIsScanning(true); showToast(`Menscan: ${file.name}...`, 'info');
+
+    const isImage = file.type.startsWith('image/');
+    const isText = file.type === 'text/plain';
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const resultStr = await callGeminiAPI(`Ekstrak dokumen "${file.name}" menjadi draf singkat matematika. Tanpa # atau **.`, "Pembuat materi", true, { type: "OBJECT", properties: { judul: { type: "STRING" }, kategori: { type: "STRING" }, deskripsi: { type: "STRING" }, konten: { type: "STRING" } }, required: ["judul", "kategori", "deskripsi", "konten"] });
-        const generatedData = JSON.parse(resultStr);
-        setFormData({ ...formData, ...generatedData, fileName: file.name, fileData: event.target.result });
-        setIsAdding(true); showToast('Scan selesai', 'success');
-      } catch (error) { showToast('Gagal scan', 'error'); } finally { setIsScanning(false); }
+        let resultStr;
+        const schema = { type: "OBJECT", properties: { judul: { type: "STRING" }, kategori: { type: "STRING" }, deskripsi: { type: "STRING" }, konten: { type: "STRING" } }, required: ["judul", "kategori", "deskripsi", "konten"] };
+
+        if (isImage) {
+          // Kirim gambar langsung ke Gemini Vision
+          resultStr = await callGeminiAPI(
+            `Ekstrak materi matematika dari gambar ini menjadi draf ringkas. Tanpa # atau **.`,
+            "Pembuat materi matematika profesional",
+            true, schema,
+            event.target.result, file.type
+          );
+        } else if (isText) {
+          // Kirim isi teks langsung
+          const textContent = event.target.result;
+          resultStr = await callGeminiAPI(
+            `Berikut isi dokumen "${file.name}":\n\n${textContent}\n\nEkstrak menjadi draf materi matematika singkat. Tanpa # atau **.`,
+            "Pembuat materi matematika profesional",
+            true, schema
+          );
+        } else {
+          // PDF / DOCX: kirim sebagai dokumen base64 ke Gemini
+          const base64Data = event.target.result;
+          resultStr = await callGeminiAPI(
+            `Ekstrak isi dokumen matematika ini menjadi draf materi singkat dan padat. Tanpa # atau **.`,
+            "Pembuat materi matematika profesional",
+            true, schema,
+            base64Data, file.type === 'application/pdf' ? 'application/pdf' : 'application/octet-stream'
+          );
+        }
+
+        const generatedData = parseGeminiJSON(resultStr);
+        setFormData(prev => ({ ...prev, ...generatedData, fileName: file.name, fileData: event.target.result }));
+        setIsAdding(true);
+        showToast('✅ Scan selesai! Cek & simpan materi.', 'success');
+      } catch (error) {
+        console.error('Scan error:', error);
+        showToast('Gagal scan dokumen. Coba file .txt atau gambar.', 'error');
+      } finally {
+        setIsScanning(false);
+        // Reset input agar file yang sama bisa dipilih ulang
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
     };
-    reader.readAsDataURL(file); 
+
+    if (isText) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -886,7 +1107,7 @@ const KelolaMateri = () => {
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"><Card className="max-w-md w-full p-6 space-y-4 shadow-xl border border-rose-100"><h3 className="text-lg font-bold text-slate-900">Hapus Materi</h3><div className="flex justify-end gap-3 pt-2"><Button variant="secondary" onClick={() => setDeleteConfirmId(null)}>Batal</Button><Button variant="danger" onClick={async () => { await deleteDoc(doc(getPublicCollection('materi'), deleteConfirmId)); setDeleteConfirmId(null); }}>Ya, Hapus</Button></div></Card></div>
       )}
-      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.txt" className="hidden" />
+      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp" className="hidden" />
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm">
         <div><h2 className="text-2xl font-bold text-slate-800">Manajemen Materi</h2><p className="text-sm text-slate-500">Kelola kurikulum dan materi pembelajaran.</p></div>
         <Button onClick={() => { setIsAdding(!isAdding); setFormData(initialForm); }} icon={isAdding ? X : Plus}>{isAdding ? 'Batal' : 'Tambah Materi'}</Button>
@@ -953,18 +1174,36 @@ const KelolaKuis = () => {
 
   const handleFileUploadKuis = async (e) => {
     const file = e.target.files[0]; if (!file) return;
+    if (file.size > 700 * 1024) { showToast('File terlalu besar! Maks 700 KB.', 'error'); return; }
     const isImage = file.type.startsWith('image/');
+    const isText = file.type === 'text/plain';
+    showToast(`Memindai ${file.name}...`, "info");
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
-        showToast("Memindai file...", "info");
-        const prompt = isImage ? "Ekstrak soal dari foto dan buat 3 kuis PG serupa." : `Ekstrak materi "${file.name}" jadi 3 kuis PG.`;
-        const r = await callGeminiAPI(prompt, "Pembuat soal ahli", true, { type: "ARRAY", items: { type: "OBJECT", properties: { pertanyaan: {type: "STRING"}, opsi_a: {type:"STRING"}, opsi_b: {type:"STRING"}, opsi_c: {type:"STRING"}, opsi_d: {type:"STRING"}, jawaban_benar: {type:"STRING"}, pembahasan: {type:"STRING"} }, required: ["pertanyaan", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "jawaban_benar", "pembahasan"] } }, isImage ? ev.target.result : null, isImage ? file.type : null);
-        setFormData(p => ({ ...p, judul: p.judul || `Kuis Baru`, soalList: [...p.soalList, ...JSON.parse(r)] }));
-        showToast("Soal diekstrak!", "success");
-      } catch(e) { showToast("Gagal ekstrak soal", "error"); }
+        let r;
+        if (isImage) {
+          r = await callGeminiAPI("Ekstrak soal matematika dari foto ini dan buat 3 soal kuis PG serupa.", "Pembuat soal ahli matematika", true, schema, ev.target.result, file.type);
+        } else if (isText) {
+          r = await callGeminiAPI(`Berikut isi dokumen:
+
+${ev.target.result}
+
+Buat 3 soal kuis PG matematika berdasarkan materi ini.`, "Pembuat soal ahli matematika", true, schema);
+        } else {
+          // PDF / DOCX kirim sebagai base64
+          r = await callGeminiAPI(`Ekstrak materi dari dokumen "${file.name}" ini dan buat 3 soal kuis PG matematika.`, "Pembuat soal ahli matematika", true, schema, ev.target.result, file.type === 'application/pdf' ? 'application/pdf' : 'application/octet-stream');
+        }
+        const soalBaru = parseGeminiJSON(r);
+        setFormData(p => ({ ...p, judul: p.judul || `Kuis dari ${file.name}`, soalList: [...p.soalList, ...soalBaru] }));
+        showToast(`✅ ${soalBaru.length} soal berhasil diekstrak!`, "success");
+      } catch(e) { 
+        console.error('Kuis scan error:', e);
+        showToast("Gagal ekstrak soal. Coba file .txt atau gambar.", "error"); 
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     };
-    reader.readAsDataURL(file);
+    if (isText) { reader.readAsText(file); } else { reader.readAsDataURL(file); }
   };
 
   return (
@@ -1131,7 +1370,7 @@ const App = () => {
   };
 
   useEffect(() => {
-    const initAuth = async () => { try { await signInAnonymously(auth); } catch (err) {} };
+    const initAuth = async () => { try { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } } catch (err) {} };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => { setUser(authUser); setLoading(false); });
     return () => unsubscribe();
