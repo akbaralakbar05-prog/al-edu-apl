@@ -413,12 +413,17 @@ const Layout = ({ children }) => {
               {profile?.fotoProfil ? (
                 <img src={profile.fotoProfil} alt="profile" className="w-14 h-14 rounded-full object-cover border-2 border-orange-300 shadow-sm" />
               ) : (
-                <div className="w-14 h-14 rounded-full bg-orange-50 border-2 border-orange-200 flex items-center justify-center text-orange-600 font-bold text-xl group-hover:bg-orange-100 transition shadow-sm">
+                <div className="w-14 h-14 rounded-full bg-orange-50 border-2 border-orange-200 flex items-center justify-center text-orange-600 font-bold text-xl transition shadow-sm">
                   {profile?.nama?.charAt(0).toUpperCase()}
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Camera size={18} className="text-white" />
+              {/* Overlay saat hover */}
+              <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera size={16} className="text-white" />
+              </div>
+              {/* Badge edit selalu terlihat */}
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                <Edit size={10} className="text-white" />
               </div>
             </label>
             <div className="flex-1 min-w-0">
@@ -828,6 +833,28 @@ const MateriDetail = () => {
             </div>
           </div>
         )}
+
+        {currentItem.dokumenData && currentItem.dokumenNama && (
+          <div className="mt-4 mb-4 p-5 bg-blue-50 border border-blue-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+                <FileText size={24} className="text-blue-600" />
+              </div>
+              <div>
+                <p className="font-bold text-slate-800 text-sm">{currentItem.dokumenNama}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Dokumen materi dari guru</p>
+              </div>
+            </div>
+            <a 
+              href={currentItem.dokumenData} 
+              download={currentItem.dokumenNama}
+              onClick={() => { logActivity('Download Dokumen', currentItem.judul); showToast('Dokumen didownload!', 'success'); }}
+              className="shrink-0 w-full sm:w-auto"
+            >
+              <Button icon={Download} className="w-full sm:w-auto">Download Dokumen</Button>
+            </a>
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -1034,7 +1061,7 @@ const getYouTubeEmbedUrl = (url) => {
 const KelolaMateri = () => {
   const { profile, materiList, showToast } = useContext(AppContext);
   const [isAdding, setIsAdding] = useState(false);
-  const initialForm = { id: '', judul: '', kategori: 'Polinomial', deskripsi: '', konten: '', youtubeUrl: '' };
+  const initialForm = { id: '', judul: '', kategori: 'Polinomial', deskripsi: '', konten: '', youtubeUrl: '', dokumenNama: '', dokumenData: '' };
   const [formData, setFormData] = useState(initialForm);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
@@ -1052,6 +1079,8 @@ const KelolaMateri = () => {
         deskripsi: formData.deskripsi, 
         konten: formData.konten,
         youtubeUrl: formData.youtubeUrl || '',
+        dokumenNama: formData.dokumenNama || '',
+        dokumenData: formData.dokumenData || '',
         updatedAt: serverTimestamp() 
       };
       if (formData.id) await setDoc(doc(getPublicCollection('materi'), formData.id), dataToSave, { merge: true });
@@ -1061,8 +1090,24 @@ const KelolaMateri = () => {
   };
 
   const handleEdit = (m) => {
-    setFormData({ id: m.id, judul: m.judul, kategori: m.kategori || 'Polinomial', deskripsi: m.deskripsi, konten: m.konten, youtubeUrl: m.youtubeUrl || '' });
+    setFormData({ id: m.id, judul: m.judul, kategori: m.kategori || 'Polinomial', deskripsi: m.deskripsi, konten: m.konten, youtubeUrl: m.youtubeUrl || '', dokumenNama: m.dokumenNama || '', dokumenData: m.dokumenData || '' });
     setIsAdding(true); window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const dokumenInputRef = useRef(null);
+  const handleDokumenUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 1024 * 1024) { showToast('Ukuran dokumen maksimal 1 MB!', 'error'); return; }
+    const allowedTypes = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation'];
+    if (!allowedTypes.includes(file.type)) { showToast('Format tidak didukung. Gunakan PDF, DOC, DOCX, PPT, atau PPTX.', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setFormData(prev => ({ ...prev, dokumenNama: file.name, dokumenData: ev.target.result }));
+      showToast(`✅ ${file.name} siap diupload`, 'success');
+    };
+    reader.readAsDataURL(file);
+    if (dokumenInputRef.current) dokumenInputRef.current.value = '';
   };
 
   const handleFileUpload = async (e) => {
@@ -1182,6 +1227,29 @@ const KelolaMateri = () => {
                 <p className="text-xs text-rose-500 mt-1">⚠️ Link tidak valid. Gunakan link YouTube yang benar.</p>
               )}
             </div>
+            {/* Upload Dokumen */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">📎 Upload Dokumen (opsional, maks 1 MB)</label>
+              <input ref={dokumenInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" onChange={handleDokumenUpload} className="hidden" />
+              {formData.dokumenNama ? (
+                <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <FileText size={20} className="text-blue-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{formData.dokumenNama}</p>
+                    <p className="text-xs text-slate-500">Dokumen siap disimpan</p>
+                  </div>
+                  <button type="button" onClick={() => setFormData(p => ({...p, dokumenNama: '', dokumenData: ''}))} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg shrink-0">
+                    <X size={16}/>
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => dokumenInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-orange-400 hover:text-orange-500 hover:bg-orange-50 transition text-sm font-medium">
+                  <Download size={18} className="rotate-180" />
+                  Pilih file PDF, DOC, DOCX, PPT, atau PPTX
+                </button>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={() => { setIsAdding(false); setFormData(initialForm); }}>Batal</Button>
               <Button type="submit">💾 Simpan Materi</Button>
@@ -1201,7 +1269,10 @@ const KelolaMateri = () => {
               <tr key={m.id} className="hover:bg-orange-50">
                 <td className="p-4">
                   <p className="font-medium text-slate-900">{m.judul}</p>
-                  {m.youtubeUrl && <span className="text-xs text-orange-500 flex items-center gap-1 mt-0.5">🎥 Ada video</span>}
+                  <div className="flex gap-2 mt-0.5 flex-wrap">
+                    {m.youtubeUrl && <span className="text-xs text-orange-500">🎥 Video</span>}
+                    {m.dokumenNama && <span className="text-xs text-blue-500">📎 {m.dokumenNama}</span>}
+                  </div>
                 </td>
                 <td className="p-4">
                   <div className="flex justify-end gap-2">
