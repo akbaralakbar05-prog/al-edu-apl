@@ -809,14 +809,23 @@ const MateriDetail = () => {
 
         <p className="text-lg text-slate-500 mb-8 border-b border-orange-100 pb-8">{currentItem.deskripsi}</p>
         <div className="mb-6 flex items-center gap-2"><FileText className="text-orange-600" size={24} /><h2 className="text-xl font-bold text-slate-800">Poin-Poin Materi Singkat</h2></div>
-        <div className="prose prose-orange max-w-none text-slate-700 mb-12 whitespace-pre-wrap leading-relaxed">{renderMarkdown(currentItem.konten)}</div>
+        <div className="prose prose-orange max-w-none text-slate-700 mb-8 whitespace-pre-wrap leading-relaxed">{renderMarkdown(currentItem.konten)}</div>
 
-        {currentItem.fileData && (
-          <div className="mt-8 pt-8 border-t border-orange-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-orange-50/50 p-6 rounded-2xl border border-orange-200/50 shadow-sm">
-            <div className="space-y-1"><h3 className="font-bold text-orange-900 text-lg">Materi Lengkap (Dokumen Asli)</h3><p className="text-sm text-slate-600">Unduh dokumen asli yang diunggah oleh guru untuk melihat penjelasan menyeluruh.</p></div>
-            <a href={currentItem.fileData} download={currentItem.fileName} className="shrink-0 w-full md:w-auto" onClick={() => { logActivity('Download Materi', currentItem.judul); showToast('Materi didownload.', 'success'); }}>
-              <Button icon={Download} className="w-full">Download {currentItem.fileName}</Button>
-            </a>
+        {currentItem.youtubeUrl && getYouTubeEmbedUrl(currentItem.youtubeUrl) && (
+          <div className="mt-4 mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">🎥</span>
+              <h3 className="text-lg font-bold text-slate-800">Video Pembelajaran</h3>
+            </div>
+            <div className="rounded-2xl overflow-hidden border border-orange-100 shadow-md w-full" style={{aspectRatio:'16/9'}}>
+              <iframe
+                src={getYouTubeEmbedUrl(currentItem.youtubeUrl)}
+                className="w-full h-full"
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                title={currentItem.judul}
+              />
+            </div>
           </div>
         )}
       </Card>
@@ -1013,27 +1022,46 @@ const AITutor = () => {
   );
 };
 
+// Helper: konversi URL YouTube biasa ke format embed
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return null;
+  // Format: youtu.be/ID atau youtube.com/watch?v=ID atau youtube.com/shorts/ID
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
+  if (match) return `https://www.youtube.com/embed/${match[1]}`;
+  return null;
+};
+
 const KelolaMateri = () => {
   const { profile, materiList, showToast } = useContext(AppContext);
   const [isAdding, setIsAdding] = useState(false);
-  const initialForm = { id: '', judul: '', kategori: 'Polinomial', deskripsi: '', konten: '', fileName: '', fileData: '' };
+  const initialForm = { id: '', judul: '', kategori: 'Polinomial', deskripsi: '', konten: '', youtubeUrl: '' };
   const [formData, setFormData] = useState(initialForm);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const fileInputRef = useRef(null);
 
   const handleSave = async (e) => {
     e.preventDefault();
+    // Validasi URL YouTube jika diisi
+    if (formData.youtubeUrl && !getYouTubeEmbedUrl(formData.youtubeUrl)) {
+      showToast('Link YouTube tidak valid. Contoh: https://youtube.com/watch?v=xxx', 'error');
+      return;
+    }
     try {
-      let dataToSave = { judul: formData.judul, kategori: formData.kategori, deskripsi: formData.deskripsi, konten: formData.konten, fileName: formData.fileName || '', fileData: formData.fileData || '', updatedAt: serverTimestamp() };
+      const dataToSave = { 
+        judul: formData.judul, 
+        kategori: formData.kategori, 
+        deskripsi: formData.deskripsi, 
+        konten: formData.konten,
+        youtubeUrl: formData.youtubeUrl || '',
+        updatedAt: serverTimestamp() 
+      };
       if (formData.id) await setDoc(doc(getPublicCollection('materi'), formData.id), dataToSave, { merge: true });
       else await addDoc(getPublicCollection('materi'), { ...dataToSave, createdBy: profile.nama, createdAt: serverTimestamp() });
-      showToast('Materi disimpan', 'success'); setIsAdding(false); setFormData(initialForm);
-    } catch (err) { showToast('Gagal menyimpan materi. Pastikan ukuran file di bawah 700 KB.', 'error'); }
+      showToast('✅ Materi berhasil disimpan!', 'success'); setIsAdding(false); setFormData(initialForm);
+    } catch (err) { showToast('Gagal menyimpan materi.', 'error'); }
   };
 
   const handleEdit = (m) => {
-    setFormData({ id: m.id, judul: m.judul, kategori: m.kategori, deskripsi: m.deskripsi, konten: m.konten, fileName: m.fileName || '', fileData: m.fileData || '' });
+    setFormData({ id: m.id, judul: m.judul, kategori: m.kategori || 'Polinomial', deskripsi: m.deskripsi, konten: m.konten, youtubeUrl: m.youtubeUrl || '' });
     setIsAdding(true); window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1103,9 +1131,18 @@ const KelolaMateri = () => {
   return (
     <div className="space-y-6">
       {deleteConfirmId && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"><Card className="max-w-md w-full p-6 space-y-4 shadow-xl border border-rose-100"><h3 className="text-lg font-bold text-slate-900">Hapus Materi</h3><div className="flex justify-end gap-3 pt-2"><Button variant="secondary" onClick={() => setDeleteConfirmId(null)}>Batal</Button><Button variant="danger" onClick={async () => { await deleteDoc(doc(getPublicCollection('materi'), deleteConfirmId)); setDeleteConfirmId(null); }}>Ya, Hapus</Button></div></Card></div>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="max-w-md w-full p-6 space-y-4 shadow-xl border border-rose-100">
+            <h3 className="text-lg font-bold text-slate-900">Hapus Materi?</h3>
+            <p className="text-sm text-slate-500">Materi yang dihapus tidak bisa dikembalikan.</p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={() => setDeleteConfirmId(null)}>Batal</Button>
+              <Button variant="danger" onClick={async () => { await deleteDoc(doc(getPublicCollection('materi'), deleteConfirmId)); setDeleteConfirmId(null); showToast('Materi dihapus', 'success'); }}>Ya, Hapus</Button>
+            </div>
+          </Card>
+        </div>
       )}
-      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp" className="hidden" />
+
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm">
         <div><h2 className="text-2xl font-bold text-slate-800">Manajemen Materi</h2><p className="text-sm text-slate-500">Kelola kurikulum dan materi pembelajaran.</p></div>
         <Button onClick={() => { setIsAdding(!isAdding); setFormData(initialForm); }} icon={isAdding ? X : Plus}>{isAdding ? 'Batal' : 'Tambah Materi'}</Button>
@@ -1114,28 +1151,69 @@ const KelolaMateri = () => {
       {isAdding && (
         <Card className="bg-orange-50/50 border-orange-100 shadow-md">
           <form onSubmit={handleSave} className="space-y-4">
-            <h3 className="text-lg font-bold text-orange-950">{formData.id ? 'Edit Materi' : 'Tambah Materi Baru'}</h3>
-            <Input label="Judul Materi" value={formData.judul} onChange={e => setFormData({...formData, judul: e.target.value})} required />
-            <Input label="Deskripsi Singkat" value={formData.deskripsi} onChange={e => setFormData({...formData, deskripsi: e.target.value})} required />
+            <h3 className="text-lg font-bold text-orange-950">{formData.id ? '✏️ Edit Materi' : '➕ Tambah Materi Baru'}</h3>
+            <Input label="Judul Materi" placeholder="Contoh: Teorema Pythagoras" value={formData.judul} onChange={e => setFormData({...formData, judul: e.target.value})} required />
+            <Input label="Deskripsi Singkat" placeholder="Contoh: Memahami hubungan sisi segitiga siku-siku" value={formData.deskripsi} onChange={e => setFormData({...formData, deskripsi: e.target.value})} required />
             <div>
-              <label className="block text-sm font-medium text-slate-700">Konten Materi Singkat</label>
-              <textarea className="w-full mt-1.5 px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 h-64" value={formData.konten} onChange={e => setFormData({...formData, konten: e.target.value})} required></textarea>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Konten Materi</label>
+              <textarea 
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 h-48 text-sm leading-relaxed resize-none" 
+                placeholder="Tulis isi materi di sini... Contoh: Teorema Pythagoras menyatakan bahwa a² + b² = c²"
+                value={formData.konten} 
+                onChange={e => setFormData({...formData, konten: e.target.value})} 
+                required
+              />
             </div>
-            {formData.fileName && (
-              <div className="p-4 bg-white rounded-xl border border-orange-200 flex items-center justify-between"><div className="flex gap-3"><FileText className="text-orange-600" /><div><p className="text-sm font-bold text-slate-800">Lampiran: {formData.fileName}</p></div></div></div>
-            )}
-            <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setIsAdding(false)}>Batal</Button><Button type="submit">Simpan Materi</Button></div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">🎥 Link Video YouTube (opsional)</label>
+              <input 
+                type="url"
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm"
+                placeholder="Contoh: https://youtube.com/watch?v=xxxxx"
+                value={formData.youtubeUrl}
+                onChange={e => setFormData({...formData, youtubeUrl: e.target.value})}
+              />
+              {formData.youtubeUrl && getYouTubeEmbedUrl(formData.youtubeUrl) && (
+                <div className="mt-2 rounded-xl overflow-hidden border border-orange-200 aspect-video">
+                  <iframe src={getYouTubeEmbedUrl(formData.youtubeUrl)} className="w-full h-full" allowFullScreen title="Preview video" />
+                </div>
+              )}
+              {formData.youtubeUrl && !getYouTubeEmbedUrl(formData.youtubeUrl) && (
+                <p className="text-xs text-rose-500 mt-1">⚠️ Link tidak valid. Gunakan link YouTube yang benar.</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => { setIsAdding(false); setFormData(initialForm); }}>Batal</Button>
+              <Button type="submit">💾 Simpan Materi</Button>
+            </div>
           </form>
         </Card>
       )}
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <table className="w-full text-left text-sm"><thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold"><tr><th className="p-4">Judul</th><th className="p-4 text-right">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">
-          {materiList.map(m => (<tr key={m.id} className="hover:bg-orange-50"><td className="p-4 font-medium text-slate-900">{m.judul}</td><td className="p-4 flex justify-end gap-2"><button onClick={() => {setFormData(m); setIsAdding(true); window.scrollTo(0,0)}} className="p-2 text-blue-600"><Edit size={16}/></button><button onClick={() => setDeleteConfirmId(m.id)} className="p-2 text-rose-600"><Trash2 size={16}/></button></td></tr>))}
-        </tbody></table>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+            <tr><th className="p-4">Judul</th><th className="p-4 text-right">Aksi</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {materiList.length === 0 && <tr><td colSpan={2} className="p-8 text-center text-slate-400">Belum ada materi. Klik "Tambah Materi" untuk mulai.</td></tr>}
+            {materiList.map(m => (
+              <tr key={m.id} className="hover:bg-orange-50">
+                <td className="p-4">
+                  <p className="font-medium text-slate-900">{m.judul}</p>
+                  {m.youtubeUrl && <span className="text-xs text-orange-500 flex items-center gap-1 mt-0.5">🎥 Ada video</span>}
+                </td>
+                <td className="p-4">
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => handleEdit(m)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={16}/></button>
+                    <button onClick={() => setDeleteConfirmId(m.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={16}/></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-
-      <div className="mt-8 pt-4"><div className="bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 rounded-3xl p-8 border border-orange-200 text-center relative shadow-sm"><div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none transform translate-x-4 -translate-y-4"><Sparkles size={160} /></div><div className="relative z-10"><h3 className="text-2xl font-extrabold text-slate-900 mb-3">Automasi Materi dengan AI</h3><button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-xl py-4 px-10 rounded-2xl font-bold text-xl"><Sparkles size={28} className={isScanning ? "animate-spin" : ""} /> {isScanning ? 'Menganalisis...' : '✨ Upload & Scan'}</button></div></div></div>
     </div>
   );
 };
@@ -1146,100 +1224,192 @@ const KelolaKuis = () => {
   const [isAdding, setIsAdding] = useState(false);
   const initialForm = { id: '', judul: '', soalList: [] };
   const [formData, setFormData] = useState(initialForm);
-  const [isGeneratingTopik, setIsGeneratingTopik] = useState(false);
-  const [topik, setTopik] = useState('');
-  const fileInputRef = useRef(null);
+  const [deleteKuisId, setDeleteKuisId] = useState(null);
 
   useEffect(() => {
-    return onSnapshot(query(getPublicCollection('kuis')), (snap) => setKuisList(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+    return onSnapshot(query(getPublicCollection('kuis')), (snap) => 
+      setKuisList(snap.docs.map(d => ({id: d.id, ...d.data()})))
+    );
   }, []);
 
   const handleSaveKuis = async (e) => {
     e.preventDefault();
-    if (formData.id) await setDoc(doc(getPublicCollection('kuis'), formData.id), { judul: formData.judul, soalList: formData.soalList, updatedAt: serverTimestamp() }, { merge: true });
-    else await addDoc(getPublicCollection('kuis'), { judul: formData.judul, soalList: formData.soalList, createdBy: profile.nama, createdAt: serverTimestamp() });
-    showToast("Kuis disimpan!", "success"); setIsAdding(false); setFormData(initialForm);
-  };
-
-  const handleGenerateTopikAI = async (e) => {
-    e.preventDefault(); setIsGeneratingTopik(true);
+    if (formData.soalList.length === 0) { showToast('Tambahkan minimal 1 soal!', 'error'); return; }
     try {
-      const r = await callGeminiAPI(`Buat 3 soal kuis PG untuk topik: "${topik}"`, "Pembuat soal kuis", true, { type: "ARRAY", items: { type: "OBJECT", properties: { pertanyaan: {type: "STRING"}, opsi_a: {type:"STRING"}, opsi_b: {type:"STRING"}, opsi_c: {type:"STRING"}, opsi_d: {type:"STRING"}, jawaban_benar: {type:"STRING"}, pembahasan: {type:"STRING"} }, required: ["pertanyaan", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "jawaban_benar", "pembahasan"] } });
-      setFormData(p => ({ ...p, judul: p.judul || `Kuis: ${topik}`, soalList: [...p.soalList, ...JSON.parse(r)] }));
-      setTopik(''); showToast("Soal ditambahkan!", "success");
-    } catch(e) { showToast("Gagal buat soal", "error"); } finally { setIsGeneratingTopik(false); }
+      if (formData.id) {
+        await setDoc(doc(getPublicCollection('kuis'), formData.id), { judul: formData.judul, soalList: formData.soalList, updatedAt: serverTimestamp() }, { merge: true });
+      } else {
+        await addDoc(getPublicCollection('kuis'), { judul: formData.judul, soalList: formData.soalList, createdBy: profile.nama, createdAt: serverTimestamp() });
+      }
+      showToast("✅ Kuis berhasil disimpan!", "success"); 
+      setIsAdding(false); 
+      setFormData(initialForm);
+    } catch(e) { showToast("Gagal menyimpan kuis.", "error"); }
   };
 
-  const handleFileUploadKuis = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    if (file.size > 700 * 1024) { showToast('File terlalu besar! Maks 700 KB.', 'error'); return; }
-    const isImage = file.type.startsWith('image/');
-    const isText = file.type === 'text/plain';
-    showToast(`Memindai ${file.name}...`, "info");
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        let r;
-        if (isImage) {
-          r = await callGeminiAPI("Ekstrak soal matematika dari foto ini dan buat 3 soal kuis PG serupa.", "Pembuat soal ahli matematika", true, schema, ev.target.result, file.type);
-        } else if (isText) {
-          r = await callGeminiAPI(`Berikut isi dokumen:
+  const tambahSoalBaru = () => {
+    setFormData(p => ({
+      ...p, 
+      soalList: [...p.soalList, {
+        pertanyaan: '', 
+        opsi_a: '', opsi_b: '', opsi_c: '', opsi_d: '', 
+        jawaban_benar: 'a', 
+        pembahasan: ''
+      }]
+    }));
+  };
 
-${ev.target.result}
+  const updateSoal = (idx, field, value) => {
+    const list = [...formData.soalList];
+    list[idx] = {...list[idx], [field]: value};
+    setFormData({...formData, soalList: list});
+  };
 
-Buat 3 soal kuis PG matematika berdasarkan materi ini.`, "Pembuat soal ahli matematika", true, schema);
-        } else {
-          // PDF / DOCX kirim sebagai base64
-          r = await callGeminiAPI(`Ekstrak materi dari dokumen "${file.name}" ini dan buat 3 soal kuis PG matematika.`, "Pembuat soal ahli matematika", true, schema, ev.target.result, file.type === 'application/pdf' ? 'application/pdf' : 'application/octet-stream');
-        }
-        const soalBaru = parseGeminiJSON(r);
-        setFormData(p => ({ ...p, judul: p.judul || `Kuis dari ${file.name}`, soalList: [...p.soalList, ...soalBaru] }));
-        showToast(`✅ ${soalBaru.length} soal berhasil diekstrak!`, "success");
-      } catch(e) { 
-        console.error('Kuis scan error:', e);
-        showToast("Gagal ekstrak soal. Coba file .txt atau gambar.", "error"); 
-      }
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    if (isText) { reader.readAsText(file); } else { reader.readAsDataURL(file); }
+  const hapusSoal = (idx) => {
+    setFormData(p => ({...p, soalList: p.soalList.filter((_,i) => i !== idx)}));
   };
 
   return (
     <div className="space-y-6">
+      {deleteKuisId && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h3 className="text-lg font-bold">Hapus Kuis?</h3>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setDeleteKuisId(null)}>Batal</Button>
+              <Button variant="danger" onClick={async () => { await deleteDoc(doc(getPublicCollection('kuis'), deleteKuisId)); setDeleteKuisId(null); showToast('Kuis dihapus', 'success'); }}>Ya, Hapus</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm">
-        <div><h2 className="text-2xl font-bold text-slate-800">Manajemen Kuis</h2></div>
-        <Button onClick={() => { setIsAdding(!isAdding); setFormData(initialForm); }} icon={isAdding ? X : Plus}>{isAdding ? 'Tutup Editor' : 'Tambah Kuis'}</Button>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Manajemen Kuis</h2>
+          <p className="text-sm text-slate-500">Buat soal pilihan ganda untuk siswa.</p>
+        </div>
+        <Button onClick={() => { setIsAdding(!isAdding); setFormData(initialForm); }} icon={isAdding ? X : Plus}>
+          {isAdding ? 'Tutup Editor' : 'Buat Kuis'}
+        </Button>
       </div>
 
       {!isAdding ? (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          <table className="w-full text-left text-sm"><thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4">Judul Kuis</th><th className="p-4 text-right">Aksi</th></tr></thead><tbody>
-            {kuisList.map(k => (<tr key={k.id} className="hover:bg-orange-50"><td className="p-4 font-medium">{k.judul}</td><td className="p-4 flex justify-end gap-2"><button onClick={() => {setFormData(k); setIsAdding(true)}} className="p-2 text-blue-600"><Edit size={16}/></button><button onClick={async() => {await deleteDoc(doc(getPublicCollection('kuis'), k.id))}} className="p-2 text-rose-600"><Trash2 size={16}/></button></td></tr>))}
-          </tbody></table>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr><th className="p-4">Judul Kuis</th><th className="p-4 text-center">Soal</th><th className="p-4 text-right">Aksi</th></tr>
+            </thead>
+            <tbody>
+              {kuisList.length === 0 && <tr><td colSpan={3} className="p-8 text-center text-slate-400">Belum ada kuis. Klik "Buat Kuis" untuk mulai.</td></tr>}
+              {kuisList.map(k => (
+                <tr key={k.id} className="hover:bg-orange-50 border-b border-slate-100">
+                  <td className="p-4 font-medium text-slate-900">{k.judul}</td>
+                  <td className="p-4 text-center text-slate-500">{k.soalList?.length || 0} soal</td>
+                  <td className="p-4">
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => { setFormData(k); setIsAdding(true); window.scrollTo(0,0); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={16}/></button>
+                      <button onClick={() => setDeleteKuisId(k.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={16}/></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            <Card className="bg-orange-50 border-orange-100 p-5"><h3 className="font-bold text-sm mb-2"><Sparkles size={16} className="inline"/> Buat via Topik</h3><form onSubmit={handleGenerateTopikAI} className="flex gap-2"><input type="text" className="w-full px-3 py-2 rounded-lg text-sm" value={topik} onChange={e=>setTopik(e.target.value)} required/><Button type="submit" disabled={isGeneratingTopik} className="text-sm px-4">{isGeneratingTopik ? '...' : 'Buat'}</Button></form></Card>
-            <Card className="bg-orange-50 border-orange-100 p-5"><h3 className="font-bold text-sm mb-2"><Camera size={16} className="inline"/> Ekstrak via Foto/Doc</h3><input type="file" ref={fileInputRef} onChange={handleFileUploadKuis} className="hidden"/><Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="w-full py-2 text-sm">Pilih File</Button></Card>
-          </div>
-          <form onSubmit={handleSaveKuis} className="space-y-6">
-            <Card className="border-t-8 border-t-orange-500 shadow-md"><Input label="Judul Kuis" value={formData.judul} onChange={e => setFormData({...formData, judul: e.target.value})} required /></Card>
-            <div className="space-y-4">
-              {formData.soalList.map((soal, idx) => (
-                <Card key={idx} className="relative group border border-orange-100 shadow-sm">
-                  <div className="absolute -right-3 -top-3 opacity-0 group-hover:opacity-100"><button type="button" onClick={() => setFormData(p => ({...p, soalList: p.soalList.filter((_,i)=>i!==idx)}))} className="bg-rose-500 text-white p-2 rounded-full"><Trash2 size={16}/></button></div>
-                  <textarea value={soal.pertanyaan} onChange={e => {const l=[...formData.soalList]; l[idx].pertanyaan=e.target.value; setFormData({...formData, soalList:l})}} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mb-4" required/>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    {['a','b','c','d'].map(opt => (<div key={opt} className={`flex items-start gap-2 p-3 rounded-xl border ${soal.jawaban_benar===opt ? 'bg-orange-50 border-orange-300' : 'bg-white'}`}><input type="radio" checked={soal.jawaban_benar===opt} onChange={()=>{const l=[...formData.soalList]; l[idx].jawaban_benar=opt; setFormData({...formData, soalList:l})}} className="mt-1" /><input type="text" value={soal[`opsi_${opt}`]} onChange={e=>{const l=[...formData.soalList]; l[idx][`opsi_${opt}`]=e.target.value; setFormData({...formData, soalList:l})}} className="w-full bg-transparent outline-none text-sm" required/></div>))}
+        <form onSubmit={handleSaveKuis} className="space-y-6">
+          {/* Header Kuis */}
+          <Card className="border-t-4 border-t-orange-500 shadow-md">
+            <h3 className="text-base font-bold text-slate-700 mb-3">📋 Informasi Kuis</h3>
+            <Input 
+              label="Judul Kuis" 
+              placeholder="Contoh: Kuis Bab 3 - Teorema Pythagoras"
+              value={formData.judul} 
+              onChange={e => setFormData({...formData, judul: e.target.value})} 
+              required 
+            />
+          </Card>
+
+          {/* Daftar Soal */}
+          <div className="space-y-4">
+            {formData.soalList.length === 0 && (
+              <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-300">
+                <p className="text-slate-400 mb-3">Belum ada soal</p>
+                <Button type="button" onClick={tambahSoalBaru} icon={Plus}>Tambah Soal Pertama</Button>
+              </div>
+            )}
+            {formData.soalList.map((soal, idx) => (
+              <Card key={idx} className="border border-orange-100 shadow-sm">
+                {/* Nomor & hapus soal */}
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full">Soal {idx + 1}</span>
+                  <button type="button" onClick={() => hapusSoal(idx)} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg">
+                    <Trash2 size={16}/>
+                  </button>
+                </div>
+
+                {/* Pertanyaan */}
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">PERTANYAAN</label>
+                  <textarea 
+                    value={soal.pertanyaan} 
+                    onChange={e => updateSoal(idx, 'pertanyaan', e.target.value)} 
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" 
+                    rows={2}
+                    placeholder="Tulis pertanyaan di sini..."
+                    required
+                  />
+                </div>
+
+                {/* Pilihan Jawaban A B C D */}
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-slate-500 mb-2">PILIHAN JAWABAN <span className="text-orange-500">(pilih radio = jawaban benar)</span></label>
+                  <div className="space-y-2">
+                    {['a','b','c','d'].map(opt => (
+                      <div key={opt} className={`flex items-center gap-3 p-3 rounded-xl border transition ${soal.jawaban_benar === opt ? 'bg-orange-50 border-orange-400' : 'bg-white border-slate-200'}`}>
+                        <input 
+                          type="radio" 
+                          name={`jawaban_${idx}`}
+                          checked={soal.jawaban_benar === opt} 
+                          onChange={() => updateSoal(idx, 'jawaban_benar', opt)}
+                          className="accent-orange-500 w-4 h-4 shrink-0"
+                        />
+                        <span className={`text-sm font-bold w-6 shrink-0 ${soal.jawaban_benar === opt ? 'text-orange-600' : 'text-slate-400'}`}>{opt.toUpperCase()}.</span>
+                        <input 
+                          type="text" 
+                          value={soal[`opsi_${opt}`]} 
+                          onChange={e => updateSoal(idx, `opsi_${opt}`, e.target.value)} 
+                          className="flex-1 bg-transparent outline-none text-sm"
+                          placeholder={`Opsi ${opt.toUpperCase()}...`}
+                          required
+                        />
+                      </div>
+                    ))}
                   </div>
-                  <textarea placeholder="Pembahasan..." value={soal.pembahasan} onChange={e => {const l=[...formData.soalList]; l[idx].pembahasan=e.target.value; setFormData({...formData, soalList:l})}} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" required/>
-                </Card>
-              ))}
-            </div>
-            <div className="flex gap-4 p-4 bg-white rounded-xl shadow-sm border border-slate-200"><Button type="button" variant="secondary" onClick={() => setFormData(p => ({...p, soalList: [...p.soalList, {pertanyaan:'', opsi_a:'', opsi_b:'', opsi_c:'', opsi_d:'', jawaban_benar:'a', pembahasan:''}]}))} className="w-full">Tambah Soal</Button><Button type="submit" className="w-full">Simpan Kuis</Button></div>
-          </form>
-        </div>
+                </div>
+
+                {/* Pembahasan */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">PEMBAHASAN (ditampilkan setelah siswa menjawab)</label>
+                  <textarea 
+                    placeholder="Jelaskan mengapa jawaban tersebut benar..." 
+                    value={soal.pembahasan} 
+                    onChange={e => updateSoal(idx, 'pembahasan', e.target.value)} 
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" 
+                    rows={2}
+                    required
+                  />
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Tombol aksi */}
+          <div className="flex gap-3 p-4 bg-white rounded-xl shadow-sm border border-slate-200">
+            <Button type="button" variant="secondary" onClick={tambahSoalBaru} icon={Plus} className="flex-1">Tambah Soal</Button>
+            <Button type="submit" className="flex-1">💾 Simpan Kuis</Button>
+          </div>
+        </form>
       )}
     </div>
   );
