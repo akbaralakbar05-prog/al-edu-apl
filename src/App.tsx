@@ -396,7 +396,6 @@ const Layout = ({ children }) => {
       { id: 'materi', label: 'Kelola Materi', icon: BookOpen },
       { id: 'kuis', label: 'Kelola Kuis', icon: FileText },
       { id: 'bank_soal', label: 'Bank Soal', icon: Archive },
-      { id: 'siswa', label: 'Progress Siswa', icon: BarChart3 },
     ],
     Siswa: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -487,10 +486,7 @@ const Layout = ({ children }) => {
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {items.map((item) => (
               <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-300 ${view === item.id ? 'nav-item-active text-white shadow-md scale-[1.02]' : 'text-slate-600 hover:text-white hover:shadow-md'}`}
-                style={view === item.id ? {} : {}}
-                onMouseEnter={e => { if(view !== item.id) e.currentTarget.style.background = 'linear-gradient(135deg,#f97316,#f59e0b)'; }}
-                onMouseLeave={e => { if(view !== item.id) e.currentTarget.style.background = ''; }}>
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${view === item.id ? 'nav-item-active text-white shadow-md' : 'text-slate-600 hover:bg-gradient-to-r hover:from-orange-500 hover:to-amber-500 hover:text-white hover:shadow-md'}`}>
                 <item.icon size={20} className="shrink-0" />{item.label}
               </button>
             ))}
@@ -528,7 +524,7 @@ const Layout = ({ children }) => {
 
 // --- SISWA COMPONENTS ---
 const SiswaDashboard = () => {
-  const { hasilKuis, setView } = useContext(AppContext);
+  const { hasilKuis, setView, profile } = useContext(AppContext);
   const totalKuisSelesai = hasilKuis.length;
   const nilaiRataRata = totalKuisSelesai > 0 ? Math.round(hasilKuis.reduce((acc, curr) => acc + curr.nilai, 0) / totalKuisSelesai) : 0;
   const targetKuis = 5;
@@ -539,20 +535,31 @@ const SiswaDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header sambutan */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-orange-100 text-sm font-medium">Selamat Datang 👋</p>
+            <h2 className="text-2xl font-bold mt-1">{profile?.nama}</h2>
+            <p className="text-orange-100 text-sm mt-1">Terus semangat belajar matematika!</p>
+          </div>
+          <div className="p-4 bg-white/20 rounded-2xl hidden sm:block">
+            <Trophy size={36} className="text-white" />
+          </div>
+        </div>
+        <div className="mt-4">
+          <div className="flex justify-between text-xs text-orange-100 mb-1">
+            <span>Progress Belajar</span>
+            <span>{progressBelajar}%</span>
+          </div>
+          <div className="w-full bg-black/20 rounded-full h-3">
+            <div className="bg-white h-3 rounded-full transition-all duration-700" style={{ width: `${progressBelajar}%` }}></div>
+          </div>
+          <p className="text-xs text-orange-100 mt-1">{totalKuisSelesai} dari {targetKuis} kuis target terselesaikan</p>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none shadow-lg">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-orange-100 font-medium">Progress Belajar</p>
-              <h3 className="text-4xl font-bold mt-2">{progressBelajar}%</h3>
-            </div>
-            <div className="p-3 bg-white/20 rounded-xl"><Trophy size={24} /></div>
-          </div>
-          <div className="mt-4 w-full bg-black/20 rounded-full h-2">
-            <div className="bg-white h-2 rounded-full transition-all duration-500" style={{ width: `${progressBelajar}%` }}></div>
-          </div>
-          <p className="text-xs text-orange-100 mt-2 italic">{totalKuisSelesai} dari target {targetKuis} kuis terselesaikan</p>
-        </Card>
         <Card className="shadow-sm">
           <div className="flex items-center gap-4">
             <div className="p-4 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle size={28} /></div>
@@ -566,8 +573,17 @@ const SiswaDashboard = () => {
           <div className="flex items-center gap-4">
             <div className="p-4 bg-orange-50 text-orange-600 rounded-xl"><Clock size={28} /></div>
             <div>
-              <p className="text-sm text-slate-500 font-medium">Estimasi Waktu Belajar</p>
+              <p className="text-sm text-slate-500 font-medium">Estimasi Belajar</p>
               <p className="text-2xl font-bold text-slate-800">{estimasiWaktuJam} Jam</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-blue-50 text-blue-600 rounded-xl"><BarChart3 size={28} /></div>
+            <div>
+              <p className="text-sm text-slate-500 font-medium">Nilai Rata-rata</p>
+              <p className="text-2xl font-bold text-slate-800">{nilaiRataRata}</p>
             </div>
           </div>
         </Card>
@@ -917,6 +933,10 @@ const MateriDetail = () => {
 };
 
 const AITutor = () => {
+  const { showToast } = useContext(AppContext);
+  useEffect(() => {
+    showToast('🔧 AL-AI Tutor sedang dalam proses pengembangan. Segera hadir!', 'info');
+  }, []);
   return (
     <Card className="h-[70vh] flex flex-col items-center justify-center p-8 text-center border-2 border-orange-100 shadow-xl bg-white/95">
       <div className="w-24 h-24 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
@@ -928,10 +948,10 @@ const AITutor = () => {
           Sedang Dalam Pengembangan
         </div>
         <h2 className="text-2xl font-bold text-slate-800">AL-AI Tutor</h2>
-        <p className="text-slate-500 leading-relaxed">
-          Fitur asisten AI untuk matematika sedang kami kembangkan agar bisa memberikan jawaban yang lebih akurat dan cepat.
+        <p className="text-slate-500 leading-relaxed text-sm">
+          Fitur asisten AI khusus matematika sedang kami kembangkan. Segera hadir untuk membantu menjawab soal dan teori matematika!
         </p>
-        <p className="text-sm text-slate-400">Silakan gunakan fitur lain seperti Materi, Kuis, dan Bank Soal sementara menunggu.</p>
+        <p className="text-xs text-slate-400">Gunakan fitur Materi, Kuis, dan Bank Soal sementara menunggu.</p>
       </div>
     </Card>
   );
@@ -1424,6 +1444,56 @@ const SiswaKuisView = () => {
   );
 };
 
+const GuruDashboard = () => {
+  const { profile, materiList } = useContext(AppContext);
+  const [kuisCount, setKuisCount] = useState(0);
+  const [userCount, setUserCount] = useState(0);
+
+  useEffect(() => {
+    const u1 = onSnapshot(query(getPublicCollection('kuis')), snap => setKuisCount(snap.size));
+    const u2 = onSnapshot(query(getPublicCollection('users')), snap => setUserCount(snap.docs.filter(d => d.data().role === 'Siswa').length));
+    return () => { u1(); u2(); };
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      {/* Ringkasan statistik */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <Card className="shadow-sm bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-orange-100 text-sm font-medium">Total Materi</p>
+              <p className="text-4xl font-bold mt-1">{materiList.length}</p>
+            </div>
+            <div className="p-3 bg-white/20 rounded-xl"><BookOpen size={22}/></div>
+          </div>
+        </Card>
+        <Card className="shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><FileText size={22}/></div>
+            <div>
+              <p className="text-sm text-slate-500">Total Kuis</p>
+              <p className="text-2xl font-bold text-slate-800">{kuisCount}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Users size={22}/></div>
+            <div>
+              <p className="text-sm text-slate-500">Total Siswa</p>
+              <p className="text-2xl font-bold text-slate-800">{userCount}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Progress siswa langsung di dashboard */}
+      <ProgressSiswa />
+    </div>
+  );
+};
+
 const ProgressSiswa = () => {
   const [activeSessions, setActiveSessions] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -1580,7 +1650,7 @@ const App = () => {
         )}
         {profile.role === 'Guru' && (
           <>
-            {view === 'dashboard' && <Card className="shadow-lg bg-white/95"><h2 className="text-2xl font-bold">Ringkasan Dasbor Guru</h2><p className="text-slate-500 mt-2">Selamat datang kembali, {profile.nama}. Gunakan menu navigasi sebelah kiri untuk mengelola materi, memindai dokumen AI, membagikan bank soal, atau membuat kuis otomatis.</p></Card>}
+            {view === 'dashboard' && <GuruDashboard />}
             {view === 'materi' && <KelolaMateri />}
             {view === 'kuis' && <KelolaKuis />}
             {view === 'bank_soal' && <BankSoalGuru />}
