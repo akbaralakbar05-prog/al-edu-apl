@@ -156,7 +156,7 @@ const Input = ({ label, ...props }) => (
 
 // --- Background Global Wrapper (baca dari localStorage untuk admin) ---
 const GlobalBackground = ({ children }) => {
-  const bgStyle = (() => {
+  const [bgStyle, setBgStyle] = useState(() => {
     try {
       const saved = localStorage.getItem('al_edu_bg');
       if (saved) {
@@ -165,13 +165,13 @@ const GlobalBackground = ({ children }) => {
       }
     } catch(e) {}
     return BG_PRESETS[0].style;
-  })();
+  });
 
   const isImage = bgStyle.startsWith('url(');
   return (
     <div className="min-h-screen relative font-sans selection:bg-orange-100">
       <div className="absolute inset-0 z-0 bg-cover bg-center bg-fixed" style={isImage ? { backgroundImage: bgStyle, backgroundColor: '#fff7ed' } : { background: bgStyle }}>
-        <div className="absolute inset-0 bg-white/30 backdrop-blur-[2px]"></div>
+        <div className="absolute inset-0 bg-orange-50/80 backdrop-blur-[2px]"></div>
       </div>
       <div className="relative z-10 flex flex-col min-h-screen">
         {children}
@@ -486,7 +486,10 @@ const Layout = ({ children }) => {
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {items.map((item) => (
               <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${view === item.id ? 'nav-item-active text-white shadow-md' : 'text-slate-600 hover:bg-gradient-to-r hover:from-orange-500 hover:to-amber-500 hover:text-white hover:shadow-md'}`}>
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${view === item.id ? 'nav-item-active text-white shadow-md' : 'text-slate-600 hover:text-white hover:shadow-md'}`}
+                style={view !== item.id ? undefined : undefined}
+                onMouseEnter={e => { if(view !== item.id) { e.currentTarget.style.background = 'linear-gradient(135deg, #f97316, #f59e0b)'; e.currentTarget.style.color = 'white'; } }}
+                onMouseLeave={e => { if(view !== item.id) { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; } }}>
                 <item.icon size={20} className="shrink-0" />{item.label}
               </button>
             ))}
@@ -1444,6 +1447,42 @@ const SiswaKuisView = () => {
   );
 };
 
+const ProgressSiswa = () => {
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
+
+  useEffect(() => {
+    const unsub1 = onSnapshot(query(getPublicCollection('active_sessions')), (snap) => setActiveSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsub2 = onSnapshot(query(getPublicCollection('activities'), orderBy('timestamp', 'desc'), limit(50)), (snap) => setActivityLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return () => { unsub1(); unsub2(); };
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-1 border-orange-200 shadow-md bg-white/95">
+          <div className="flex items-center gap-2 mb-4"><span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span><h3 className="text-lg font-bold text-slate-800">Siswa Aktif (Live)</h3></div>
+          <div className="space-y-3">
+            {activeSessions.length === 0 ? <p className="text-sm text-slate-500 py-4 text-center">Tidak ada siswa aktif</p> : activeSessions.map((session) => (
+              <div key={session.id} className="p-3 bg-orange-50 border border-orange-100 rounded-xl flex items-center justify-between"><div><p className="font-bold text-sm">{session.userName}</p><p className="text-xs text-orange-700 truncate max-w-[150px]">{session.type}</p></div><Activity size={16} className="text-emerald-500 animate-pulse"/></div>
+            ))}
+          </div>
+        </Card>
+        <Card className="lg:col-span-2 shadow-md bg-white/95">
+          <h3 className="text-lg font-bold text-slate-800 mb-6">Log Riwayat Aktivitas Terbaru</h3>
+          <div className="overflow-auto max-h-64"><table className="w-full text-left text-sm"><thead className="bg-slate-50 sticky top-0"><tr><th className="p-3">Siswa</th><th className="p-3">Aktivitas</th><th className="p-3">Materi</th></tr></thead><tbody className="divide-y divide-slate-100">
+            {activityLogs.map(log => (<tr key={log.id}>
+              <td className="p-3 font-semibold">{log.userName}</td>
+              <td className="p-3"><span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-bold">{log.type}</span></td>
+              <td className="p-3 text-slate-600">{log.itemName}</td>
+            </tr>))}
+          </tbody></table></div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
 const GuruDashboard = () => {
   const { profile, materiList } = useContext(AppContext);
   const [kuisCount, setKuisCount] = useState(0);
@@ -1490,42 +1529,6 @@ const GuruDashboard = () => {
 
       {/* Progress siswa langsung di dashboard */}
       <ProgressSiswa />
-    </div>
-  );
-};
-
-const ProgressSiswa = () => {
-  const [activeSessions, setActiveSessions] = useState([]);
-  const [activityLogs, setActivityLogs] = useState([]);
-
-  useEffect(() => {
-    const unsub1 = onSnapshot(query(getPublicCollection('active_sessions')), (snap) => setActiveSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsub2 = onSnapshot(query(getPublicCollection('activities'), orderBy('timestamp', 'desc'), limit(50)), (snap) => setActivityLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => { unsub1(); unsub2(); };
-  }, []);
-
-  return (
-    <div className="space-y-6">
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1 border-orange-200 shadow-md bg-white/95">
-          <div className="flex items-center gap-2 mb-4"><span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span><h3 className="text-lg font-bold text-slate-800">Siswa Aktif (Live)</h3></div>
-          <div className="space-y-3">
-            {activeSessions.length === 0 ? <p className="text-sm text-slate-500 py-4 text-center">Tidak ada siswa aktif</p> : activeSessions.map((session) => (
-              <div key={session.id} className="p-3 bg-orange-50 border border-orange-100 rounded-xl flex items-center justify-between"><div><p className="font-bold text-sm">{session.userName}</p><p className="text-xs text-orange-700 truncate max-w-[150px]">{session.type}</p></div><Activity size={16} className="text-emerald-500 animate-pulse"/></div>
-            ))}
-          </div>
-        </Card>
-        <Card className="lg:col-span-2 shadow-md bg-white/95">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Log Riwayat Aktivitas Terbaru</h3>
-          <div className="overflow-auto max-h-64"><table className="w-full text-left text-sm"><thead className="bg-slate-50 sticky top-0"><tr><th className="p-3">Siswa</th><th className="p-3">Aktivitas</th><th className="p-3">Materi</th></tr></thead><tbody className="divide-y divide-slate-100">
-            {activityLogs.map(log => (<tr key={log.id}>
-              <td className="p-3 font-semibold">{log.userName}</td>
-              <td className="p-3"><span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-bold">{log.type}</span></td>
-              <td className="p-3 text-slate-600">{log.itemName}</td>
-            </tr>))}
-          </tbody></table></div>
-        </Card>
-      </div>
     </div>
   );
 };
