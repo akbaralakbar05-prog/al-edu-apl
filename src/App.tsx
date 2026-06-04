@@ -26,15 +26,6 @@ const appId = 'al-edu-app';
 
 // Path Gambar Latar Belakang (Pastikan file ini ada di folder public Anda)
 const BG_IMAGE_URL = '/IMG-20260224-WA0075.jpg';
-const BG_PRESETS = [
-  { label: '🌅 Default', value: 'default', style: `url(${BG_IMAGE_URL})` },
-  { label: '🟠 Orange', value: 'orange', style: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fdba74 100%)' },
-  { label: '🌊 Biru', value: 'blue', style: 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 50%, #93c5fd 100%)' },
-  { label: '🌿 Hijau', value: 'green', style: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 50%, #86efac 100%)' },
-  { label: '🌸 Merah Muda', value: 'pink', style: 'linear-gradient(135deg, #fdf2f8 0%, #fbcfe8 50%, #f9a8d4 100%)' },
-  { label: '🌙 Gelap', value: 'dark', style: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)' },
-  { label: '☁️ Putih Bersih', value: 'white', style: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' },
-];
 
 // --- Contexts ---
 const AppContext = createContext(null);
@@ -154,31 +145,17 @@ const Input = ({ label, ...props }) => (
   </div>
 );
 
-// --- Background Global Wrapper (baca dari localStorage untuk admin) ---
-const GlobalBackground = ({ children }) => {
-  const [bgStyle, setBgStyle] = useState(() => {
-    try {
-      const saved = localStorage.getItem('al_edu_bg');
-      if (saved) {
-        const found = BG_PRESETS.find(p => p.value === saved);
-        if (found) return found.style;
-      }
-    } catch(e) {}
-    return BG_PRESETS[0].style;
-  });
-
-  const isImage = bgStyle.startsWith('url(');
-  return (
-    <div className="min-h-screen relative font-sans selection:bg-orange-100">
-      <div className="absolute inset-0 z-0 bg-cover bg-center bg-fixed" style={isImage ? { backgroundImage: bgStyle, backgroundColor: '#fff7ed' } : { background: bgStyle }}>
-        <div className="absolute inset-0 bg-orange-50/80 backdrop-blur-[2px]"></div>
-      </div>
-      <div className="relative z-10 flex flex-col min-h-screen">
-        {children}
-      </div>
+// --- Background Global Wrapper ---
+const GlobalBackground = ({ children }) => (
+  <div className="min-h-screen relative font-sans selection:bg-orange-100">
+    <div className="absolute inset-0 z-0 bg-cover bg-center bg-fixed" style={{ backgroundImage: `url('${BG_IMAGE_URL}')`, backgroundColor: '#fff7ed' }}>
+      <div className="absolute inset-0 bg-orange-50/90 backdrop-blur-[2px]"></div>
     </div>
-  );
-};
+    <div className="relative z-10 flex flex-col min-h-screen">
+      {children}
+    </div>
+  </div>
+);
 
 // --- Pages ---
 const LandingPage = ({ onStart }) => {
@@ -197,14 +174,14 @@ const LandingPage = ({ onStart }) => {
       <main className="pt-32 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex-1">
         <div className="text-center space-y-8 max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 border border-orange-200 text-orange-800 font-medium text-sm shadow-sm">
-            <Sparkles size={16} /> Platform Belajar Matematika Interaktif
+            <Sparkles size={16} /> Platform Belajar Generasi Baru UNM
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-tight">
             Belajar Matematika <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-amber-500 drop-shadow-sm">Lebih Menyenangkan</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-700 leading-relaxed font-medium">
-            Kuasai konsep matematika dari dasar hingga mahir dengan materi interaktif, kuis pintar, dan bantuan AI Tutor 24/7 untuk hasil belajar yang maksimal.
+            Kuasai konsep matematika dari dasar hingga mahir dengan materi interaktif, kuis pintar, dan bantuan AI Tutor 24/7 bertemakan warna almamater UNM.
           </p>
           <div className="flex justify-center gap-4 pt-4">
             <Button onClick={onStart} className="px-8 py-4 text-lg shadow-xl shadow-orange-500/20">Mulai Belajar Sekarang</Button>
@@ -256,33 +233,21 @@ const AuthPortal = ({ onLoginSuccess }) => {
   const handleRegister = async (e) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password.trim()) { showToast("Harap isi semua kolom!", "error"); return; }
-    if (password.length < 6) { showToast("Kata sandi minimal 6 karakter!", "error"); return; }
     setLoading(true);
     try {
-      const querySnap = await getDocs(query(getPublicCollection('users')));
+      const q = query(getPublicCollection('users'));
+      const querySnap = await getDocs(q);
       const usersList = querySnap.docs.map(doc => doc.data());
-
-      // Cek email sudah terdaftar
       const emailExists = usersList.some(u => u.email.toLowerCase() === email.toLowerCase());
+      
       if (emailExists) {
         showToast("Email ini sudah terdaftar! Gunakan email lain.", "error"); setLoading(false); return;
       }
 
-      // BLOK: 1 nama hanya boleh 1 role - cek apakah nama sudah dipakai
-      const namaExists = usersList.some(u => u.nama.toLowerCase() === name.trim().toLowerCase());
-      if (namaExists) {
-        showToast("Nama ini sudah terdaftar dengan role lain! Setiap nama hanya boleh memiliki 1 akun.", "error"); 
-        setLoading(false); return;
-      }
-
-      // Paksa role = Siswa jika bukan Admin yang mendaftar
-      // (Guru & Admin hanya bisa dibuat oleh Admin dari panel manajemen)
-      const finalRole = 'Siswa';
-
       const userId = 'user_' + Math.random().toString(36).substring(2, 9);
-      const newProfile = { id: userId, nama: name.trim(), email: email.trim().toLowerCase(), password: password, role: finalRole, createdAt: new Date().toISOString() };
+      const newProfile = { id: userId, nama: name.trim(), email: email.trim().toLowerCase(), password: password, role: role, createdAt: new Date().toISOString() };
       await setDoc(doc(getPublicCollection('users'), userId), newProfile);
-      showToast("Registrasi Berhasil! Akun Siswa dibuat. Silakan Login.", "success");
+      showToast("Registrasi Berhasil! Silakan Login.", "success");
       setAuthMode('login'); setName(''); setPassword('');
     } catch (err) { showToast("Gagal melakukan pendaftaran.", "error"); } finally { setLoading(false); }
   };
@@ -329,7 +294,7 @@ const AuthPortal = ({ onLoginSuccess }) => {
           <div className="text-center mb-6">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white font-extrabold text-2xl mx-auto shadow-md shadow-orange-200">AL</div>
             <h2 className="text-2xl font-extrabold text-slate-900 mt-4">{authMode === 'login' ? 'Masuk ke Portal AL Edu' : authMode === 'register' ? 'Daftar Akun Baru' : 'Ubah Kata Sandi Baru'}</h2>
-            <p className="text-slate-500 text-xs mt-1">Platform Pembelajaran Matematika Premium</p>
+            <p className="text-slate-500 text-xs mt-1">Platform Pembelajaran Matematika Premium UNM</p>
           </div>
 
           {authMode === 'login' && (
@@ -350,13 +315,14 @@ const AuthPortal = ({ onLoginSuccess }) => {
           {authMode === 'register' && (
             <form onSubmit={handleRegister} className="space-y-4">
               <Input label="Nama Lengkap" placeholder="Contoh: Budi Santoso" value={name} onChange={e => setName(e.target.value)} required />
-              <Input label="Alamat Email" type="email" placeholder="contoh@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
+              <Input label="Alamat Email" type="email" placeholder="budi@student.unm.ac.id" value={email} onChange={e => setEmail(e.target.value)} required />
               <Input label="Kata Sandi Baru" type="password" placeholder="Minimal 6 karakter" value={password} onChange={e => setPassword(e.target.value)} required />
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-2">
-                <span className="text-blue-600 text-lg">🎓</span>
-                <div>
-                  <p className="text-xs font-bold text-blue-800">Akun Siswa</p>
-                  <p className="text-xs text-blue-600">Pendaftaran publik hanya untuk role Siswa. Guru & Admin dibuat oleh Admin.</p>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">Pilih Peran Belajar</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Siswa', 'Guru', 'Admin'].map(r => (
+                    <button key={r} type="button" onClick={() => setRole(r)} className={`py-2 rounded-xl border text-xs font-semibold transition-all ${role === r ? 'border-orange-600 bg-orange-50 text-orange-700 ring-2 ring-orange-600/20' : 'border-slate-200 bg-white text-slate-600 hover:bg-orange-50'}`}>{r}</button>
+                  ))}
                 </div>
               </div>
               <Button type="submit" disabled={loading} className="w-full py-3 mt-2">{loading ? 'Mendaftarkan...' : 'Daftar Sekarang'}</Button>
@@ -389,13 +355,13 @@ const Layout = ({ children }) => {
     Admin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'users', label: 'Manajemen Pengguna', icon: Users },
-      { id: 'tampilan', label: 'Atur Tampilan', icon: Settings },
     ],
     Guru: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'materi', label: 'Kelola Materi', icon: BookOpen },
       { id: 'kuis', label: 'Kelola Kuis', icon: FileText },
       { id: 'bank_soal', label: 'Bank Soal', icon: Archive },
+      { id: 'siswa', label: 'Progress Siswa', icon: BarChart3 },
     ],
     Siswa: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -436,25 +402,8 @@ const Layout = ({ children }) => {
       </div>
 
       <div className="flex flex-1 overflow-hidden relative z-10 h-screen">
-        <style>{`
-          @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-          }
-          .animated-sidebar {
-            background: linear-gradient(-45deg, #fff7ed, #fffbeb, #fff, #fef3c7, #fff7ed);
-            background-size: 400% 400%;
-            animation: gradientShift 8s ease infinite;
-          }
-          .nav-item-active {
-            background: linear-gradient(135deg, #ea580c, #f97316, #fb923c);
-            background-size: 200% 200%;
-            animation: gradientShift 3s ease infinite;
-          }
-        `}</style>
-        <aside className={`animated-sidebar absolute md:static inset-y-0 left-0 border-r border-orange-100 w-64 transform transition-transform duration-300 z-30 flex flex-col ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 shadow-lg md:shadow-none`}>
-          <div className="p-6 hidden md:flex items-center gap-2 font-bold text-2xl text-slate-800 border-b border-orange-100">
+        <aside className={`absolute md:static inset-y-0 left-0 bg-white/95 backdrop-blur-md border-r border-slate-200 w-64 transform transition-transform duration-300 z-30 flex flex-col ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 shadow-lg md:shadow-none`}>
+          <div className="p-6 hidden md:flex items-center gap-2 font-bold text-2xl text-slate-800 border-b border-slate-100">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-600 to-amber-500 text-white flex items-center justify-center shadow-md">AL</div>Edu.
           </div>
           
@@ -485,12 +434,8 @@ const Layout = ({ children }) => {
 
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {items.map((item) => (
-              <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${view === item.id ? 'nav-item-active text-white shadow-md' : 'text-slate-600 hover:text-white hover:shadow-md'}`}
-                style={view !== item.id ? undefined : undefined}
-                onMouseEnter={e => { if(view !== item.id) { e.currentTarget.style.background = 'linear-gradient(135deg, #f97316, #f59e0b)'; e.currentTarget.style.color = 'white'; } }}
-                onMouseLeave={e => { if(view !== item.id) { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; } }}>
-                <item.icon size={20} className="shrink-0" />{item.label}
+              <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 text-slate-600 rounded-xl hover:bg-orange-100 hover:text-orange-700 transition-colors font-medium`}>
+                <item.icon size={20} />{item.label}
               </button>
             ))}
           </nav>
@@ -527,7 +472,7 @@ const Layout = ({ children }) => {
 
 // --- SISWA COMPONENTS ---
 const SiswaDashboard = () => {
-  const { hasilKuis, setView, profile } = useContext(AppContext);
+  const { hasilKuis, setView } = useContext(AppContext);
   const totalKuisSelesai = hasilKuis.length;
   const nilaiRataRata = totalKuisSelesai > 0 ? Math.round(hasilKuis.reduce((acc, curr) => acc + curr.nilai, 0) / totalKuisSelesai) : 0;
   const targetKuis = 5;
@@ -538,31 +483,20 @@ const SiswaDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header sambutan */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-orange-100 text-sm font-medium">Selamat Datang 👋</p>
-            <h2 className="text-2xl font-bold mt-1">{profile?.nama}</h2>
-            <p className="text-orange-100 text-sm mt-1">Terus semangat belajar matematika!</p>
-          </div>
-          <div className="p-4 bg-white/20 rounded-2xl hidden sm:block">
-            <Trophy size={36} className="text-white" />
-          </div>
-        </div>
-        <div className="mt-4">
-          <div className="flex justify-between text-xs text-orange-100 mb-1">
-            <span>Progress Belajar</span>
-            <span>{progressBelajar}%</span>
-          </div>
-          <div className="w-full bg-black/20 rounded-full h-3">
-            <div className="bg-white h-3 rounded-full transition-all duration-700" style={{ width: `${progressBelajar}%` }}></div>
-          </div>
-          <p className="text-xs text-orange-100 mt-1">{totalKuisSelesai} dari {targetKuis} kuis target terselesaikan</p>
-        </div>
-      </div>
-
       <div className="grid md:grid-cols-3 gap-6">
+        <Card className="bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none shadow-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-orange-100 font-medium">Progress Belajar</p>
+              <h3 className="text-4xl font-bold mt-2">{progressBelajar}%</h3>
+            </div>
+            <div className="p-3 bg-white/20 rounded-xl"><Trophy size={24} /></div>
+          </div>
+          <div className="mt-4 w-full bg-black/20 rounded-full h-2">
+            <div className="bg-white h-2 rounded-full transition-all duration-500" style={{ width: `${progressBelajar}%` }}></div>
+          </div>
+          <p className="text-xs text-orange-100 mt-2 italic">{totalKuisSelesai} dari target {targetKuis} kuis terselesaikan</p>
+        </Card>
         <Card className="shadow-sm">
           <div className="flex items-center gap-4">
             <div className="p-4 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle size={28} /></div>
@@ -576,17 +510,8 @@ const SiswaDashboard = () => {
           <div className="flex items-center gap-4">
             <div className="p-4 bg-orange-50 text-orange-600 rounded-xl"><Clock size={28} /></div>
             <div>
-              <p className="text-sm text-slate-500 font-medium">Estimasi Belajar</p>
+              <p className="text-sm text-slate-500 font-medium">Estimasi Waktu Belajar</p>
               <p className="text-2xl font-bold text-slate-800">{estimasiWaktuJam} Jam</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="p-4 bg-blue-50 text-blue-600 rounded-xl"><BarChart3 size={28} /></div>
-            <div>
-              <p className="text-sm text-slate-500 font-medium">Nilai Rata-rata</p>
-              <p className="text-2xl font-bold text-slate-800">{nilaiRataRata}</p>
             </div>
           </div>
         </Card>
@@ -935,31 +860,203 @@ const MateriDetail = () => {
   );
 };
 
+// Helper: Kirim percakapan multi-turn ke Gemini dengan riwayat lengkap
+const callGeminiChat = async (chatHistory, newUserText, imageBase64 = null, imageMimeType = null) => {
+  const url = `/api/gemini`;
+
+  // Bangun riwayat percakapan dalam format Gemini (role: user/model)
+  const contents = chatHistory.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.text }]
+  }));
+
+  // Tambah pesan user terbaru (dengan gambar jika ada)
+  const newParts = [];
+  if (imageBase64 && imageMimeType) {
+    const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    newParts.push({ inlineData: { mimeType: imageMimeType, data: base64Data } });
+  }
+  newParts.push({ text: newUserText });
+  contents.push({ role: 'user', parts: newParts });
+
+  const payload = {
+    contents,
+    systemInstruction: {
+      parts: [{ text: "Anda adalah AL-AI Tutor, asisten matematika cerdas untuk platform AL Edu UNM. Jawab pertanyaan matematika dengan jelas, langkah demi langkah, dan gunakan bahasa Indonesia yang mudah dipahami siswa. Jika ada gambar soal, analisis dan selesaikan soal tersebut." }]
+    },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'gemini-1.5-flash', payload })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${response.status}`);
+  }
+  const result = await response.json();
+  const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Respons AI kosong");
+  return text;
+};
+
 const AITutor = () => {
-  const { showToast } = useContext(AppContext);
-  useEffect(() => {
-    showToast('🔧 AL-AI Tutor sedang dalam proses pengembangan. Segera hadir!', 'info');
-  }, []);
+  const INITIAL_MSG = { role: 'ai', text: 'Halo! Saya **AL-AI Tutor** siap membantu kamu belajar matematika. 📐\n\nKamu bisa:\n• Tanyakan konsep atau rumus apapun\n• Upload foto soal untuk dibantu penyelesaiannya\n• Minta penjelasan langkah demi langkah\n\nAda yang ingin ditanyakan?' };
+  const [messages, setMessages] = useState([INITIAL_MSG]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageData, setImageData] = useState(null);
+  const [imageMime, setImageMime] = useState(null);
+  const messagesEndRef = useRef(null);
+  const imageInputRef = useRef(null);
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isTyping]);
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setImagePreview(ev.target.result);
+      setImageData(ev.target.result);
+      setImageMime(file.type);
+    };
+    reader.readAsDataURL(file);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text && !imageData) return;
+
+    const displayText = text || '📷 (Foto soal)';
+    const userMsg = { role: 'user', text: displayText, imagePreview: imagePreview };
+    
+    // Ambil riwayat chat (kecuali pesan AI pertama/pembuka & pesan dengan gambar)
+    const historyForApi = messages
+      .filter(m => m !== INITIAL_MSG)
+      .map(m => ({ role: m.role, text: m.text }));
+
+    setMessages(p => [...p, userMsg]);
+    setInput('');
+    setImagePreview(null);
+    const sentImageData = imageData;
+    const sentImageMime = imageMime;
+    setImageData(null);
+    setImageMime(null);
+    setIsTyping(true);
+
+    try {
+      const aiText = await callGeminiChat(historyForApi, text || 'Tolong analisis dan selesaikan soal pada gambar ini.', sentImageData, sentImageMime);
+      setMessages(p => [...p, { role: 'ai', text: aiText }]);
+    } catch (e) {
+      console.error('AI Tutor error:', e);
+      setMessages(p => [...p, { role: 'ai', text: `Maaf, terjadi kesalahan: ${e.message}. Coba kirim ulang pertanyaanmu.` }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const renderText = (text) => {
+    if (!text) return null;
+    return text.split('\n').map((line, i) => {
+      const clean = line.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+      if (clean.startsWith('• ') || clean.startsWith('- ')) return <li key={i} className="ml-4 list-disc mb-1">{clean.slice(2)}</li>;
+      if (clean.trim() === '') return <br key={i} />;
+      return <p key={i} className="mb-1 leading-relaxed">{clean}</p>;
+    });
+  };
+
   return (
-    <Card className="h-[70vh] flex flex-col items-center justify-center p-8 text-center border-2 border-orange-100 shadow-xl bg-white/95">
-      <div className="w-24 h-24 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
-        <BrainCircuit size={48} className="text-orange-400" />
-      </div>
-      <div className="space-y-3 max-w-md">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold border border-amber-200">
-          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block"></span>
-          Sedang Dalam Pengembangan
+    <Card className="h-[85vh] flex flex-col p-0 overflow-hidden border-2 border-orange-100 shadow-xl bg-white/95">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-4 flex items-center justify-between text-white shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center"><BrainCircuit size={28} className="text-white" /></div>
+          <div>
+            <h3 className="font-bold text-lg">AL-AI Tutor</h3>
+            <p className="text-orange-100 text-xs flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"></span> Siap membantu 24/7
+            </p>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold text-slate-800">AL-AI Tutor</h2>
-        <p className="text-slate-500 leading-relaxed text-sm">
-          Fitur asisten AI khusus matematika sedang kami kembangkan. Segera hadir untuk membantu menjawab soal dan teori matematika!
-        </p>
-        <p className="text-xs text-slate-400">Gunakan fitur Materi, Kuis, dan Bank Soal sementara menunggu.</p>
+        <button onClick={() => setMessages([INITIAL_MSG])} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg font-medium transition">Reset Chat</button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/50">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+            {msg.role === 'ai' && (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mb-1">AL</div>
+            )}
+            <div className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-4 py-3 shadow-sm text-sm md:text-base ${msg.role === 'user' ? 'bg-orange-500 text-white rounded-br-none' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'}`}>
+              {msg.imagePreview && <img src={msg.imagePreview} alt="soal" className="rounded-lg mb-2 max-h-40 object-contain" />}
+              <div className="whitespace-pre-wrap leading-relaxed">{renderText(msg.text)}</div>
+            </div>
+          </div>
+        ))}
+        {isTyping && (
+          <div className="flex justify-start items-end gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-xs font-bold shrink-0">AL</div>
+            <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm flex gap-1 items-center">
+              <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"></span>
+              <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{animationDelay:'0.15s'}}></span>
+              <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{animationDelay:'0.3s'}}></span>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Image preview strip */}
+      {imagePreview && (
+        <div className="px-4 py-2 bg-orange-50 border-t border-orange-100 flex items-center gap-3 shrink-0">
+          <img src={imagePreview} alt="preview" className="h-16 w-16 object-cover rounded-lg border border-orange-200" />
+          <div className="flex-1"><p className="text-xs font-semibold text-slate-700">Foto soal siap dikirim</p><p className="text-xs text-slate-500">Tambahkan pertanyaan jika perlu, lalu tekan Kirim</p></div>
+          <button onClick={() => { setImagePreview(null); setImageData(null); setImageMime(null); }} className="p-1.5 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200"><X size={16}/></button>
+        </div>
+      )}
+
+      {/* Input area */}
+      <div className="p-3 sm:p-4 bg-white border-t border-slate-100 shrink-0">
+        <div className="flex gap-2 max-w-4xl mx-auto items-end">
+          <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageSelect} className="hidden" />
+          <button onClick={() => imageInputRef.current?.click()} title="Upload foto soal" className="p-3 text-orange-500 hover:bg-orange-50 rounded-xl transition shrink-0 border border-orange-100">
+            <Camera size={20} />
+          </button>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="Tanyakan rumus, konsep, atau upload foto soal... (Enter kirim, Shift+Enter baris baru)"
+            rows={1}
+            className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 resize-none text-sm leading-relaxed"
+            style={{ minHeight: '48px', maxHeight: '120px' }}
+          />
+          <Button onClick={handleSend} disabled={isTyping || (!input.trim() && !imageData)} className="rounded-xl px-4 shadow-md shrink-0">
+            <Send size={18} />
+          </Button>
+        </div>
+        <p className="text-center text-xs text-slate-400 mt-2">AL-AI Tutor menggunakan Gemini AI · Jawaban mungkin tidak sempurna</p>
       </div>
     </Card>
   );
 };
 
+// Helper: konversi URL YouTube biasa ke format embed
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return null;
+  // Format: youtu.be/ID atau youtube.com/watch?v=ID atau youtube.com/shorts/ID
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
+  if (match) return `https://www.youtube.com/embed/${match[1]}`;
+  return null;
+};
 
 const KelolaMateri = () => {
   const { profile, materiList, showToast } = useContext(AppContext);
@@ -1483,107 +1580,6 @@ const ProgressSiswa = () => {
   );
 };
 
-const GuruDashboard = () => {
-  const { profile, materiList } = useContext(AppContext);
-  const [kuisCount, setKuisCount] = useState(0);
-  const [userCount, setUserCount] = useState(0);
-
-  useEffect(() => {
-    const u1 = onSnapshot(query(getPublicCollection('kuis')), snap => setKuisCount(snap.size));
-    const u2 = onSnapshot(query(getPublicCollection('users')), snap => setUserCount(snap.docs.filter(d => d.data().role === 'Siswa').length));
-    return () => { u1(); u2(); };
-  }, []);
-
-  return (
-    <div className="space-y-6">
-      {/* Ringkasan statistik */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card className="shadow-sm bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-orange-100 text-sm font-medium">Total Materi</p>
-              <p className="text-4xl font-bold mt-1">{materiList.length}</p>
-            </div>
-            <div className="p-3 bg-white/20 rounded-xl"><BookOpen size={22}/></div>
-          </div>
-        </Card>
-        <Card className="shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><FileText size={22}/></div>
-            <div>
-              <p className="text-sm text-slate-500">Total Kuis</p>
-              <p className="text-2xl font-bold text-slate-800">{kuisCount}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Users size={22}/></div>
-            <div>
-              <p className="text-sm text-slate-500">Total Siswa</p>
-              <p className="text-2xl font-bold text-slate-800">{userCount}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Progress siswa langsung di dashboard */}
-      <ProgressSiswa />
-    </div>
-  );
-};
-
-const AdminBackground = () => {
-  const { showToast } = useContext(AppContext);
-  const [current, setCurrent] = useState(() => {
-    try { return localStorage.getItem('al_edu_bg') || 'default'; } catch(e) { return 'default'; }
-  });
-
-  const handleSelect = (value) => {
-    setCurrent(value);
-    try { localStorage.setItem('al_edu_bg', value); } catch(e) {}
-    showToast('✅ Background berhasil diubah! Refresh halaman untuk melihat perubahan.', 'success');
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card className="shadow-lg">
-        <h2 className="text-2xl font-bold text-slate-800 mb-1">🎨 Atur Tampilan Background</h2>
-        <p className="text-slate-500 text-sm mb-6">Pilih tema background yang akan ditampilkan di seluruh halaman website.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {BG_PRESETS.map(preset => (
-            <button
-              key={preset.value}
-              onClick={() => handleSelect(preset.value)}
-              className={`relative rounded-2xl overflow-hidden border-4 transition-all duration-200 ${current === preset.value ? 'border-orange-500 shadow-xl scale-105' : 'border-slate-200 hover:border-orange-300'}`}
-            >
-              {/* Preview background */}
-              <div 
-                className="h-24 w-full"
-                style={preset.style.startsWith('url(') 
-                  ? { backgroundImage: preset.style, backgroundSize: 'cover', backgroundPosition: 'center' } 
-                  : { background: preset.style }
-                }
-              />
-              <div className="p-2 bg-white text-center">
-                <span className="text-xs font-bold text-slate-700">{preset.label}</span>
-              </div>
-              {current === preset.value && (
-                <div className="absolute top-2 right-2 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center shadow-md">
-                  <CheckCircle size={14} className="text-white" />
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-          <p className="text-xs text-amber-700 font-medium">⚠️ Setelah memilih tema, klik tombol refresh browser (F5) agar perubahan terlihat di semua halaman.</p>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
   useEffect(() => { return onSnapshot(query(getPublicCollection('users')), (snap) => setUsers(snap.docs.map(d => ({id: d.id, ...d.data()})))); }, []);
@@ -1604,7 +1600,6 @@ const App = () => {
   const [materiList, setMateriList] = useState([]);
   const [materiLoading, setMateriLoading] = useState(true);
   const [hasilKuis, setHasilKuis] = useState([]);
-  const [bgStyle, setBgStyle] = useState('default');
 
   const showToast = (msg, type = 'info') => setToast({ msg, type });
 
@@ -1653,7 +1648,7 @@ const App = () => {
         )}
         {profile.role === 'Guru' && (
           <>
-            {view === 'dashboard' && <GuruDashboard />}
+            {view === 'dashboard' && <Card className="shadow-lg bg-white/95"><h2 className="text-2xl font-bold">Ringkasan Dasbor Guru</h2><p className="text-slate-500 mt-2">Selamat datang kembali, {profile.nama}. Gunakan menu navigasi sebelah kiri untuk mengelola materi, memindai dokumen AI, membagikan bank soal, atau membuat kuis otomatis.</p></Card>}
             {view === 'materi' && <KelolaMateri />}
             {view === 'kuis' && <KelolaKuis />}
             {view === 'bank_soal' && <BankSoalGuru />}
@@ -1664,7 +1659,6 @@ const App = () => {
           <>
             {view === 'dashboard' && <Card className="shadow-lg bg-white/95"><h2 className="text-2xl font-bold">Sistem Overview</h2><p className="text-slate-500 mt-2">Selamat datang Admin. Anda dapat memantau seluruh pengguna sistem AL Edu secara real-time.</p></Card>}
             {view === 'users' && <AdminUsers />}
-            {view === 'tampilan' && <AdminBackground />}
           </>
         )}
       </Layout>
