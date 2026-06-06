@@ -26,15 +26,6 @@ const appId = 'al-edu-app';
 
 // Path Gambar Latar Belakang (Pastikan file ini ada di folder public Anda)
 const BG_IMAGE_URL = '/IMG-20260224-WA0075.jpg';
-const BG_PRESETS = [
-  { label: '🌅 Default', value: 'default', style: `url(${BG_IMAGE_URL})` },
-  { label: '🟠 Orange', value: 'orange', style: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fdba74 100%)' },
-  { label: '🌊 Biru', value: 'blue', style: 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 50%, #93c5fd 100%)' },
-  { label: '🌿 Hijau', value: 'green', style: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 50%, #86efac 100%)' },
-  { label: '🌸 Merah Muda', value: 'pink', style: 'linear-gradient(135deg, #fdf2f8 0%, #fbcfe8 50%, #f9a8d4 100%)' },
-  { label: '🌙 Gelap', value: 'dark', style: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)' },
-  { label: '☁️ Putih Bersih', value: 'white', style: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' },
-];
 
 // --- Contexts ---
 const AppContext = createContext(null);
@@ -154,31 +145,17 @@ const Input = ({ label, ...props }) => (
   </div>
 );
 
-// --- Background Global Wrapper (baca dari localStorage untuk admin) ---
-const GlobalBackground = ({ children }) => {
-  const [bgStyle, setBgStyle] = useState(() => {
-    try {
-      const saved = localStorage.getItem('al_edu_bg');
-      if (saved) {
-        const found = BG_PRESETS.find(p => p.value === saved);
-        if (found) return found.style;
-      }
-    } catch(e) {}
-    return BG_PRESETS[0].style;
-  });
-
-  const isImage = bgStyle.startsWith('url(');
-  return (
-    <div className="min-h-screen relative font-sans selection:bg-orange-100">
-      <div className="absolute inset-0 z-0 bg-cover bg-center bg-fixed" style={isImage ? { backgroundImage: bgStyle, backgroundColor: '#fff7ed' } : { background: bgStyle }}>
-        <div className="absolute inset-0 bg-orange-50/80 backdrop-blur-[2px]"></div>
-      </div>
-      <div className="relative z-10 flex flex-col min-h-screen">
-        {children}
-      </div>
+// --- Background Global Wrapper ---
+const GlobalBackground = ({ children }) => (
+  <div className="min-h-screen relative font-sans selection:bg-orange-100">
+    <div className="absolute inset-0 z-0 bg-cover bg-center bg-fixed" style={{ backgroundImage: `url('${BG_IMAGE_URL}')`, backgroundColor: '#fff7ed' }}>
+      <div className="absolute inset-0 bg-orange-50/90 backdrop-blur-[2px]"></div>
     </div>
-  );
-};
+    <div className="relative z-10 flex flex-col min-h-screen">
+      {children}
+    </div>
+  </div>
+);
 
 // --- Pages ---
 const LandingPage = ({ onStart }) => {
@@ -197,14 +174,14 @@ const LandingPage = ({ onStart }) => {
       <main className="pt-32 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex-1">
         <div className="text-center space-y-8 max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 border border-orange-200 text-orange-800 font-medium text-sm shadow-sm">
-            <Sparkles size={16} /> Platform Belajar Matematika Interaktif
+            <Sparkles size={16} /> Platform Belajar Matematika Digital
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-tight">
             Belajar Matematika <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-amber-500 drop-shadow-sm">Lebih Menyenangkan</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-700 leading-relaxed font-medium">
-            Kuasai konsep matematika dari dasar hingga mahir dengan materi interaktif, kuis pintar, dan bantuan AI Tutor 24/7 untuk hasil belajar yang maksimal.
+            Kuasai konsep matematika dari dasar hingga mahir dengan materi interaktif, kuis pintar, dan bantuan tutor digital kapan saja dan di mana saja.
           </p>
           <div className="flex justify-center gap-4 pt-4">
             <Button onClick={onStart} className="px-8 py-4 text-lg shadow-xl shadow-orange-500/20">Mulai Belajar Sekarang</Button>
@@ -256,33 +233,21 @@ const AuthPortal = ({ onLoginSuccess }) => {
   const handleRegister = async (e) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password.trim()) { showToast("Harap isi semua kolom!", "error"); return; }
-    if (password.length < 6) { showToast("Kata sandi minimal 6 karakter!", "error"); return; }
     setLoading(true);
     try {
-      const querySnap = await getDocs(query(getPublicCollection('users')));
+      const q = query(getPublicCollection('users'));
+      const querySnap = await getDocs(q);
       const usersList = querySnap.docs.map(doc => doc.data());
-
-      // Cek email sudah terdaftar
       const emailExists = usersList.some(u => u.email.toLowerCase() === email.toLowerCase());
+      
       if (emailExists) {
         showToast("Email ini sudah terdaftar! Gunakan email lain.", "error"); setLoading(false); return;
       }
 
-      // BLOK: 1 nama hanya boleh 1 role - cek apakah nama sudah dipakai
-      const namaExists = usersList.some(u => u.nama.toLowerCase() === name.trim().toLowerCase());
-      if (namaExists) {
-        showToast("Nama ini sudah terdaftar dengan role lain! Setiap nama hanya boleh memiliki 1 akun.", "error"); 
-        setLoading(false); return;
-      }
-
-      // Paksa role = Siswa jika bukan Admin yang mendaftar
-      // (Guru & Admin hanya bisa dibuat oleh Admin dari panel manajemen)
-      const finalRole = 'Siswa';
-
       const userId = 'user_' + Math.random().toString(36).substring(2, 9);
-      const newProfile = { id: userId, nama: name.trim(), email: email.trim().toLowerCase(), password: password, role: finalRole, createdAt: new Date().toISOString() };
+      const newProfile = { id: userId, nama: name.trim(), email: email.trim().toLowerCase(), password: password, role: role, createdAt: new Date().toISOString() };
       await setDoc(doc(getPublicCollection('users'), userId), newProfile);
-      showToast("Registrasi Berhasil! Akun Siswa dibuat. Silakan Login.", "success");
+      showToast("Registrasi Berhasil! Silakan Login.", "success");
       setAuthMode('login'); setName(''); setPassword('');
     } catch (err) { showToast("Gagal melakukan pendaftaran.", "error"); } finally { setLoading(false); }
   };
@@ -350,13 +315,14 @@ const AuthPortal = ({ onLoginSuccess }) => {
           {authMode === 'register' && (
             <form onSubmit={handleRegister} className="space-y-4">
               <Input label="Nama Lengkap" placeholder="Contoh: Budi Santoso" value={name} onChange={e => setName(e.target.value)} required />
-              <Input label="Alamat Email" type="email" placeholder="contoh@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
+              <Input label="Alamat Email" type="email" placeholder="budi@student.unm.ac.id" value={email} onChange={e => setEmail(e.target.value)} required />
               <Input label="Kata Sandi Baru" type="password" placeholder="Minimal 6 karakter" value={password} onChange={e => setPassword(e.target.value)} required />
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-2">
-                <span className="text-blue-600 text-lg">🎓</span>
-                <div>
-                  <p className="text-xs font-bold text-blue-800">Akun Siswa</p>
-                  <p className="text-xs text-blue-600">Pendaftaran publik hanya untuk role Siswa. Guru & Admin dibuat oleh Admin.</p>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">Pilih Peran Belajar</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Siswa', 'Guru', 'Admin'].map(r => (
+                    <button key={r} type="button" onClick={() => setRole(r)} className={`py-2 rounded-xl border text-xs font-semibold transition-all ${role === r ? 'border-orange-600 bg-orange-50 text-orange-700 ring-2 ring-orange-600/20' : 'border-slate-200 bg-white text-slate-600 hover:bg-orange-50'}`}>{r}</button>
+                  ))}
                 </div>
               </div>
               <Button type="submit" disabled={loading} className="w-full py-3 mt-2">{loading ? 'Mendaftarkan...' : 'Daftar Sekarang'}</Button>
@@ -389,13 +355,13 @@ const Layout = ({ children }) => {
     Admin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'users', label: 'Manajemen Pengguna', icon: Users },
-      { id: 'tampilan', label: 'Atur Tampilan', icon: Settings },
     ],
     Guru: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'materi', label: 'Kelola Materi', icon: BookOpen },
       { id: 'kuis', label: 'Kelola Kuis', icon: FileText },
       { id: 'bank_soal', label: 'Bank Soal', icon: Archive },
+      { id: 'siswa', label: 'Progress Siswa', icon: BarChart3 },
     ],
     Siswa: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -436,25 +402,8 @@ const Layout = ({ children }) => {
       </div>
 
       <div className="flex flex-1 overflow-hidden relative z-10 h-screen">
-        <style>{`
-          @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-          }
-          .animated-sidebar {
-            background: linear-gradient(-45deg, #fff7ed, #fffbeb, #fff, #fef3c7, #fff7ed);
-            background-size: 400% 400%;
-            animation: gradientShift 8s ease infinite;
-          }
-          .nav-item-active {
-            background: linear-gradient(135deg, #ea580c, #f97316, #fb923c);
-            background-size: 200% 200%;
-            animation: gradientShift 3s ease infinite;
-          }
-        `}</style>
-        <aside className={`animated-sidebar absolute md:static inset-y-0 left-0 border-r border-orange-100 w-64 transform transition-transform duration-300 z-30 flex flex-col ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 shadow-lg md:shadow-none`}>
-          <div className="p-6 hidden md:flex items-center gap-2 font-bold text-2xl text-slate-800 border-b border-orange-100">
+        <aside className={`absolute md:static inset-y-0 left-0 bg-white/95 backdrop-blur-md border-r border-slate-200 w-64 transform transition-transform duration-300 z-30 flex flex-col ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 shadow-lg md:shadow-none`}>
+          <div className="p-6 hidden md:flex items-center gap-2 font-bold text-2xl text-slate-800 border-b border-slate-100">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-600 to-amber-500 text-white flex items-center justify-center shadow-md">AL</div>Edu.
           </div>
           
@@ -485,12 +434,8 @@ const Layout = ({ children }) => {
 
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {items.map((item) => (
-              <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${view === item.id ? 'nav-item-active text-white shadow-md' : 'text-slate-600 hover:text-white hover:shadow-md'}`}
-                style={view !== item.id ? undefined : undefined}
-                onMouseEnter={e => { if(view !== item.id) { e.currentTarget.style.background = 'linear-gradient(135deg, #f97316, #f59e0b)'; e.currentTarget.style.color = 'white'; } }}
-                onMouseLeave={e => { if(view !== item.id) { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; } }}>
-                <item.icon size={20} className="shrink-0" />{item.label}
+              <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 text-slate-600 rounded-xl hover:bg-orange-100 hover:text-orange-700 transition-colors font-medium`}>
+                <item.icon size={20} />{item.label}
               </button>
             ))}
           </nav>
@@ -527,7 +472,7 @@ const Layout = ({ children }) => {
 
 // --- SISWA COMPONENTS ---
 const SiswaDashboard = () => {
-  const { hasilKuis, setView, profile } = useContext(AppContext);
+  const { hasilKuis, setView } = useContext(AppContext);
   const totalKuisSelesai = hasilKuis.length;
   const nilaiRataRata = totalKuisSelesai > 0 ? Math.round(hasilKuis.reduce((acc, curr) => acc + curr.nilai, 0) / totalKuisSelesai) : 0;
   const targetKuis = 5;
@@ -538,31 +483,20 @@ const SiswaDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header sambutan */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-orange-100 text-sm font-medium">Selamat Datang 👋</p>
-            <h2 className="text-2xl font-bold mt-1">{profile?.nama}</h2>
-            <p className="text-orange-100 text-sm mt-1">Terus semangat belajar matematika!</p>
-          </div>
-          <div className="p-4 bg-white/20 rounded-2xl hidden sm:block">
-            <Trophy size={36} className="text-white" />
-          </div>
-        </div>
-        <div className="mt-4">
-          <div className="flex justify-between text-xs text-orange-100 mb-1">
-            <span>Progress Belajar</span>
-            <span>{progressBelajar}%</span>
-          </div>
-          <div className="w-full bg-black/20 rounded-full h-3">
-            <div className="bg-white h-3 rounded-full transition-all duration-700" style={{ width: `${progressBelajar}%` }}></div>
-          </div>
-          <p className="text-xs text-orange-100 mt-1">{totalKuisSelesai} dari {targetKuis} kuis target terselesaikan</p>
-        </div>
-      </div>
-
       <div className="grid md:grid-cols-3 gap-6">
+        <Card className="bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none shadow-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-orange-100 font-medium">Progress Belajar</p>
+              <h3 className="text-4xl font-bold mt-2">{progressBelajar}%</h3>
+            </div>
+            <div className="p-3 bg-white/20 rounded-xl"><Trophy size={24} /></div>
+          </div>
+          <div className="mt-4 w-full bg-black/20 rounded-full h-2">
+            <div className="bg-white h-2 rounded-full transition-all duration-500" style={{ width: `${progressBelajar}%` }}></div>
+          </div>
+          <p className="text-xs text-orange-100 mt-2 italic">{totalKuisSelesai} dari target {targetKuis} kuis terselesaikan</p>
+        </Card>
         <Card className="shadow-sm">
           <div className="flex items-center gap-4">
             <div className="p-4 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle size={28} /></div>
@@ -576,17 +510,8 @@ const SiswaDashboard = () => {
           <div className="flex items-center gap-4">
             <div className="p-4 bg-orange-50 text-orange-600 rounded-xl"><Clock size={28} /></div>
             <div>
-              <p className="text-sm text-slate-500 font-medium">Estimasi Belajar</p>
+              <p className="text-sm text-slate-500 font-medium">Estimasi Waktu Belajar</p>
               <p className="text-2xl font-bold text-slate-800">{estimasiWaktuJam} Jam</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="p-4 bg-blue-50 text-blue-600 rounded-xl"><BarChart3 size={28} /></div>
-            <div>
-              <p className="text-sm text-slate-500 font-medium">Nilai Rata-rata</p>
-              <p className="text-2xl font-bold text-slate-800">{nilaiRataRata}</p>
             </div>
           </div>
         </Card>
@@ -935,26 +860,67 @@ const MateriDetail = () => {
   );
 };
 
+// Helper: Kirim percakapan multi-turn ke Gemini dengan riwayat lengkap
+const callGeminiChat = async (chatHistory, newUserText, imageBase64 = null, imageMimeType = null) => {
+  const url = `/api/gemini`;
+
+  // Bangun riwayat percakapan dalam format Gemini (role: user/model)
+  const contents = chatHistory.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.text }]
+  }));
+
+  // Tambah pesan user terbaru (dengan gambar jika ada)
+  const newParts = [];
+  if (imageBase64 && imageMimeType) {
+    const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    newParts.push({ inlineData: { mimeType: imageMimeType, data: base64Data } });
+  }
+  newParts.push({ text: newUserText });
+  contents.push({ role: 'user', parts: newParts });
+
+  const payload = {
+    contents,
+    systemInstruction: {
+      parts: [{ text: "Anda adalah AL-AI Tutor, asisten matematika cerdas untuk platform AL Edu. Jawab pertanyaan matematika dengan jelas, langkah demi langkah, dan gunakan bahasa Indonesia yang mudah dipahami siswa. Jika ada gambar soal, analisis dan selesaikan soal tersebut." }]
+    },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'gemini-1.5-flash', payload })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${response.status}`);
+  }
+  const result = await response.json();
+  const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Respons AI kosong");
+  return text;
+};
+
 const AITutor = () => {
   const { showToast } = useContext(AppContext);
   useEffect(() => {
-    showToast('🔧 AL-AI Tutor sedang dalam proses pengembangan. Segera hadir!', 'info');
+    showToast('🔧 Fitur ini sedang dalam proses pengembangan. Segera hadir!', 'info');
   }, []);
   return (
-    <Card className="h-[70vh] flex flex-col items-center justify-center p-8 text-center border-2 border-orange-100 shadow-xl bg-white/95">
-      <div className="w-24 h-24 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
+    <Card className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center border-2 border-orange-100 shadow-xl bg-white/95">
+      <div className="w-24 h-24 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center mb-6">
         <BrainCircuit size={48} className="text-orange-400" />
       </div>
-      <div className="space-y-3 max-w-md">
+      <div className="space-y-3 max-w-sm">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold border border-amber-200">
           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block"></span>
-          Sedang Dalam Pengembangan
+          Dalam Proses Pengembangan
         </div>
         <h2 className="text-2xl font-bold text-slate-800">AL-AI Tutor</h2>
-        <p className="text-slate-500 leading-relaxed text-sm">
-          Fitur asisten AI khusus matematika sedang kami kembangkan. Segera hadir untuk membantu menjawab soal dan teori matematika!
-        </p>
-        <p className="text-xs text-slate-400">Gunakan fitur Materi, Kuis, dan Bank Soal sementara menunggu.</p>
+        <p className="text-slate-500 text-sm leading-relaxed">Fitur asisten AI khusus matematika sedang kami kembangkan untuk memberikan pengalaman belajar terbaik.</p>
+        <p className="text-xs text-slate-400">Gunakan menu Materi dan Kuis sementara menunggu fitur ini hadir.</p>
       </div>
     </Card>
   );
@@ -1196,7 +1162,7 @@ const KelolaKuis = () => {
   const { showToast, profile } = useContext(AppContext);
   const [kuisList, setKuisList] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
-  const initialForm = { id: '', judul: '', soalList: [] };
+  const initialForm = { id: '', judul: '', soalList: [], waktuMulai: '', waktuAkhir: '' };
   const [formData, setFormData] = useState(initialForm);
   const [deleteKuisId, setDeleteKuisId] = useState(null);
 
@@ -1210,10 +1176,16 @@ const KelolaKuis = () => {
     e.preventDefault();
     if (formData.soalList.length === 0) { showToast('Tambahkan minimal 1 soal!', 'error'); return; }
     try {
+      const kuisData = { 
+        judul: formData.judul, 
+        soalList: formData.soalList,
+        waktuMulai: formData.waktuMulai || '',
+        waktuAkhir: formData.waktuAkhir || '',
+      };
       if (formData.id) {
-        await setDoc(doc(getPublicCollection('kuis'), formData.id), { judul: formData.judul, soalList: formData.soalList, updatedAt: serverTimestamp() }, { merge: true });
+        await setDoc(doc(getPublicCollection('kuis'), formData.id), { ...kuisData, updatedAt: serverTimestamp() }, { merge: true });
       } else {
-        await addDoc(getPublicCollection('kuis'), { judul: formData.judul, soalList: formData.soalList, createdBy: profile.nama, createdAt: serverTimestamp() });
+        await addDoc(getPublicCollection('kuis'), { ...kuisData, createdBy: profile.nama, createdAt: serverTimestamp() });
       }
       showToast("✅ Kuis berhasil disimpan!", "success"); 
       setIsAdding(false); 
@@ -1271,22 +1243,39 @@ const KelolaKuis = () => {
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
-              <tr><th className="p-4">Judul Kuis</th><th className="p-4 text-center">Soal</th><th className="p-4 text-right">Aksi</th></tr>
+              <tr><th className="p-4">Judul Kuis</th><th className="p-4 text-center">Soal</th><th className="p-4 text-center">Status</th><th className="p-4 text-right">Aksi</th></tr>
             </thead>
             <tbody>
               {kuisList.length === 0 && <tr><td colSpan={3} className="p-8 text-center text-slate-400">Belum ada kuis. Klik "Buat Kuis" untuk mulai.</td></tr>}
-              {kuisList.map(k => (
-                <tr key={k.id} className="hover:bg-orange-50 border-b border-slate-100">
-                  <td className="p-4 font-medium text-slate-900">{k.judul}</td>
-                  <td className="p-4 text-center text-slate-500">{k.soalList?.length || 0} soal</td>
-                  <td className="p-4">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => { setFormData(k); setIsAdding(true); window.scrollTo(0,0); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={16}/></button>
-                      <button onClick={() => setDeleteKuisId(k.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={16}/></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {kuisList.map(k => {
+                const now = new Date();
+                const mulai = k.waktuMulai ? new Date(k.waktuMulai) : null;
+                const akhir = k.waktuAkhir ? new Date(k.waktuAkhir) : null;
+                const belumMulai = mulai && now < mulai;
+                const sudahBerakhir = akhir && now > akhir;
+                const aktif = !belumMulai && !sudahBerakhir;
+                return (
+                  <tr key={k.id} className="hover:bg-orange-50 border-b border-slate-100">
+                    <td className="p-4">
+                      <p className="font-medium text-slate-900">{k.judul}</p>
+                      {k.waktuMulai && <p className="text-xs text-slate-400 mt-0.5">Mulai: {new Date(k.waktuMulai).toLocaleString('id-ID')}</p>}
+                      {k.waktuAkhir && <p className="text-xs text-slate-400">Berakhir: {new Date(k.waktuAkhir).toLocaleString('id-ID')}</p>}
+                    </td>
+                    <td className="p-4 text-center text-slate-500">{k.soalList?.length || 0} soal</td>
+                    <td className="p-4 text-center">
+                      {belumMulai && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">⏳ Belum Mulai</span>}
+                      {aktif && <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">✅ Aktif</span>}
+                      {sudahBerakhir && <span className="px-2 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-full">🔒 Berakhir</span>}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => { setFormData({...k, waktuMulai: k.waktuMulai||'', waktuAkhir: k.waktuAkhir||''}); setIsAdding(true); window.scrollTo(0,0); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={16}/></button>
+                        <button onClick={() => setDeleteKuisId(k.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={16}/></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1295,13 +1284,46 @@ const KelolaKuis = () => {
           {/* Header Kuis */}
           <Card className="border-t-4 border-t-orange-500 shadow-md">
             <h3 className="text-base font-bold text-slate-700 mb-3">📋 Informasi Kuis</h3>
-            <Input 
-              label="Judul Kuis" 
-              placeholder="Contoh: Kuis Bab 3 - Teorema Pythagoras"
-              value={formData.judul} 
-              onChange={e => setFormData({...formData, judul: e.target.value})} 
-              required 
-            />
+            <div className="space-y-4">
+              <Input 
+                label="Judul Kuis" 
+                placeholder="Contoh: Kuis Bab 3 - Teorema Pythagoras"
+                value={formData.judul} 
+                onChange={e => setFormData({...formData, judul: e.target.value})} 
+                required 
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    🕐 Waktu Mulai Akses <span className="text-slate-400 font-normal">(opsional)</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm"
+                    value={formData.waktuMulai}
+                    onChange={e => setFormData({...formData, waktuMulai: e.target.value})}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Kosongkan = bisa diakses kapan saja</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    🕐 Waktu Berakhir Akses <span className="text-slate-400 font-normal">(opsional)</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm"
+                    value={formData.waktuAkhir}
+                    onChange={e => setFormData({...formData, waktuAkhir: e.target.value})}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Kosongkan = tidak ada batas waktu</p>
+                </div>
+              </div>
+              {(formData.waktuMulai || formData.waktuAkhir) && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700">
+                  ℹ️ Kuis hanya bisa diakses siswa {formData.waktuMulai ? `mulai ${new Date(formData.waktuMulai).toLocaleString('id-ID')}` : ''}{formData.waktuMulai && formData.waktuAkhir ? ' sampai ' : ''}{formData.waktuAkhir ? new Date(formData.waktuAkhir).toLocaleString('id-ID') : ''}
+                </div>
+              )}
+            </div>
           </Card>
 
           {/* Daftar Soal */}
@@ -1436,301 +1458,171 @@ const SiswaKuisView = () => {
   return (
     <div className="space-y-6"><h2 className="text-2xl font-bold bg-white p-6 rounded-2xl shadow-sm">Kuis Interaktif</h2>
       <div className="grid md:grid-cols-2 gap-6">
-        {kuisList.map(kuis => (
-          <Card hover key={kuis.id} className="flex flex-col border-orange-100 shadow-md bg-white/95">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 mb-4"><Trophy /></div>
-            <h3 className="font-bold text-lg mb-4">{kuis.judul}</h3><Button className="w-full mt-auto" onClick={() => {setActiveKuis(kuis); setAnswers({}); setSubmitted(false)}}>Mulai Kuis</Button>
-          </Card>
-        ))}
+        {kuisList.map(kuis => {
+          const now = new Date();
+          const mulai = kuis.waktuMulai ? new Date(kuis.waktuMulai) : null;
+          const akhir = kuis.waktuAkhir ? new Date(kuis.waktuAkhir) : null;
+          const belumMulai = mulai && now < mulai;
+          const sudahBerakhir = akhir && now > akhir;
+          const bisaDiakses = !belumMulai && !sudahBerakhir;
+          return (
+            <Card key={kuis.id} className={`flex flex-col border-orange-100 shadow-md bg-white/95 ${!bisaDiakses ? 'opacity-70' : ''}`}>
+              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 mb-4"><Trophy /></div>
+              <h3 className="font-bold text-lg mb-2">{kuis.judul}</h3>
+              {kuis.waktuMulai && <p className="text-xs text-slate-400 mb-1">🕐 Mulai: {new Date(kuis.waktuMulai).toLocaleString('id-ID')}</p>}
+              {kuis.waktuAkhir && <p className="text-xs text-slate-400 mb-3">🕐 Berakhir: {new Date(kuis.waktuAkhir).toLocaleString('id-ID')}</p>}
+              {belumMulai && <div className="mb-3 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-semibold">⏳ Kuis belum dibuka</div>}
+              {sudahBerakhir && <div className="mb-3 px-3 py-2 bg-slate-100 text-slate-500 rounded-xl text-xs font-semibold">🔒 Kuis sudah berakhir</div>}
+              <Button className="w-full mt-auto" disabled={!bisaDiakses} onClick={() => { if(bisaDiakses){setActiveKuis(kuis); setAnswers({}); setSubmitted(false);} }}>
+                {bisaDiakses ? 'Mulai Kuis' : (belumMulai ? 'Belum Dibuka' : 'Sudah Berakhir')}
+              </Button>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
 };
 
 const ProgressSiswa = () => {
+  const { showToast } = useContext(AppContext);
   const [activeSessions, setActiveSessions] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
-    const unsub1 = onSnapshot(query(getPublicCollection('active_sessions')), (snap) => setActiveSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsub2 = onSnapshot(query(getPublicCollection('activities'), orderBy('timestamp', 'desc'), limit(50)), (snap) => setActivityLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    // Siswa aktif: hanya tampilkan session yang updatedAt dalam 3 menit terakhir
+    const unsub1 = onSnapshot(query(getPublicCollection('active_sessions')), (snap) => {
+      const now = Date.now();
+      const aktif = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(s => {
+          if (!s.updatedAt) return true;
+          const ts = s.updatedAt?.toMillis ? s.updatedAt.toMillis() : new Date(s.updatedAt).getTime();
+          return (now - ts) < 3 * 60 * 1000; // 3 menit
+        });
+      setActiveSessions(aktif);
+    });
+    const unsub2 = onSnapshot(
+      query(getPublicCollection('activities'), orderBy('timestamp', 'desc'), limit(50)),
+      (snap) => setActivityLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
     return () => { unsub1(); unsub2(); };
   }, []);
 
-  return (
-    <div className="space-y-6">
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1 border-orange-200 shadow-md bg-white/95">
-          <div className="flex items-center gap-2 mb-4"><span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span><h3 className="text-lg font-bold text-slate-800">Siswa Aktif (Live)</h3></div>
-          <div className="space-y-3">
-            {activeSessions.length === 0 ? <p className="text-sm text-slate-500 py-4 text-center">Tidak ada siswa aktif</p> : activeSessions.map((session) => (
-              <div key={session.id} className="p-3 bg-orange-50 border border-orange-100 rounded-xl flex items-center justify-between"><div><p className="font-bold text-sm">{session.userName}</p><p className="text-xs text-orange-700 truncate max-w-[150px]">{session.type}</p></div><Activity size={16} className="text-emerald-500 animate-pulse"/></div>
-            ))}
-          </div>
-        </Card>
-        <Card className="lg:col-span-2 shadow-md bg-white/95">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Log Riwayat Aktivitas Terbaru</h3>
-          <div className="overflow-auto max-h-64"><table className="w-full text-left text-sm"><thead className="bg-slate-50 sticky top-0"><tr><th className="p-3">Siswa</th><th className="p-3">Aktivitas</th><th className="p-3">Materi</th></tr></thead><tbody className="divide-y divide-slate-100">
-            {activityLogs.map(log => (<tr key={log.id}>
-              <td className="p-3 font-semibold">{log.userName}</td>
-              <td className="p-3"><span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-bold">{log.type}</span></td>
-              <td className="p-3 text-slate-600">{log.itemName}</td>
-            </tr>))}
-          </tbody></table></div>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-const GuruDashboard = () => {
-  const { profile, materiList } = useContext(AppContext);
-  const [kuisCount, setKuisCount] = useState(0);
-  const [userCount, setUserCount] = useState(0);
-
-  useEffect(() => {
-    const u1 = onSnapshot(query(getPublicCollection('kuis')), snap => setKuisCount(snap.size));
-    const u2 = onSnapshot(query(getPublicCollection('users')), snap => setUserCount(snap.docs.filter(d => d.data().role === 'Siswa').length));
-    return () => { u1(); u2(); };
-  }, []);
-
-  return (
-    <div className="space-y-6">
-      {/* Ringkasan statistik */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card className="shadow-sm bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-orange-100 text-sm font-medium">Total Materi</p>
-              <p className="text-4xl font-bold mt-1">{materiList.length}</p>
-            </div>
-            <div className="p-3 bg-white/20 rounded-xl"><BookOpen size={22}/></div>
-          </div>
-        </Card>
-        <Card className="shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><FileText size={22}/></div>
-            <div>
-              <p className="text-sm text-slate-500">Total Kuis</p>
-              <p className="text-2xl font-bold text-slate-800">{kuisCount}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Users size={22}/></div>
-            <div>
-              <p className="text-sm text-slate-500">Total Siswa</p>
-              <p className="text-2xl font-bold text-slate-800">{userCount}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Progress siswa langsung di dashboard */}
-      <ProgressSiswa />
-    </div>
-  );
-};
-
-const AdminBackground = () => {
-  const { showToast } = useContext(AppContext);
-  const [current, setCurrent] = useState(() => {
-    try { return localStorage.getItem('al_edu_bg') || 'default'; } catch(e) { return 'default'; }
-  });
-
-  const handleSelect = (value) => {
-    setCurrent(value);
-    try { localStorage.setItem('al_edu_bg', value); } catch(e) {}
-    showToast('✅ Background berhasil diubah! Refresh halaman untuk melihat perubahan.', 'success');
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card className="shadow-lg">
-        <h2 className="text-2xl font-bold text-slate-800 mb-1">🎨 Atur Tampilan Background</h2>
-        <p className="text-slate-500 text-sm mb-6">Pilih tema background yang akan ditampilkan di seluruh halaman website.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {BG_PRESETS.map(preset => (
-            <button
-              key={preset.value}
-              onClick={() => handleSelect(preset.value)}
-              className={`relative rounded-2xl overflow-hidden border-4 transition-all duration-200 ${current === preset.value ? 'border-orange-500 shadow-xl scale-105' : 'border-slate-200 hover:border-orange-300'}`}
-            >
-              {/* Preview background */}
-              <div 
-                className="h-24 w-full"
-                style={preset.style.startsWith('url(') 
-                  ? { backgroundImage: preset.style, backgroundSize: 'cover', backgroundPosition: 'center' } 
-                  : { background: preset.style }
-                }
-              />
-              <div className="p-2 bg-white text-center">
-                <span className="text-xs font-bold text-slate-700">{preset.label}</span>
-              </div>
-              {current === preset.value && (
-                <div className="absolute top-2 right-2 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center shadow-md">
-                  <CheckCircle size={14} className="text-white" />
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-          <p className="text-xs text-amber-700 font-medium">⚠️ Setelah memilih tema, klik tombol refresh browser (F5) agar perubahan terlihat di semua halaman.</p>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const AdminUsers = () => {
-  const { showToast } = useContext(AppContext);
-  const [users, setUsers] = useState([]);
-  const [isAdding, setIsAdding] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
-  const [form, setForm] = useState({ nama: '', email: '', password: '', role: 'Guru' });
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    return onSnapshot(query(getPublicCollection('users')), (snap) =>
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    );
-  }, []);
-
-  const handleTambah = async (e) => {
-    e.preventDefault();
-    if (!form.nama.trim() || !form.email.trim() || !form.password.trim()) {
-      showToast('Harap isi semua kolom!', 'error'); return;
-    }
-    if (form.password.length < 6) {
-      showToast('Password minimal 6 karakter!', 'error'); return;
-    }
-    // Cek nama & email sudah ada
-    const namaAda = users.some(u => u.nama.toLowerCase() === form.nama.trim().toLowerCase());
-    if (namaAda) { showToast('Nama sudah terdaftar!', 'error'); return; }
-    const emailAda = users.some(u => u.email.toLowerCase() === form.email.trim().toLowerCase());
-    if (emailAda) { showToast('Email sudah terdaftar!', 'error'); return; }
-
-    setSaving(true);
+  const handleResetRiwayat = async () => {
     try {
-      const userId = 'user_' + Math.random().toString(36).substring(2, 9);
-      await setDoc(doc(getPublicCollection('users'), userId), {
-        id: userId,
-        nama: form.nama.trim(),
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
-        role: form.role,
-        createdAt: new Date().toISOString()
-      });
-      showToast(`✅ Akun ${form.role} "${form.nama}" berhasil dibuat!`, 'success');
-      setForm({ nama: '', email: '', password: '', role: 'Guru' });
-      setIsAdding(false);
-    } catch (err) {
-      showToast('Gagal membuat akun.', 'error');
-    } finally { setSaving(false); }
+      const snap = await getDocs(getPublicCollection('activities'));
+      const deletes = snap.docs.map(d => deleteDoc(doc(getPublicCollection('activities'), d.id)));
+      await Promise.all(deletes);
+      showToast('✅ Riwayat aktivitas berhasil direset!', 'success');
+      setConfirmReset(false);
+    } catch(e) {
+      showToast('Gagal mereset riwayat.', 'error');
+    }
   };
 
-  const roleColor = { Siswa: 'text-blue-600 bg-blue-50', Guru: 'text-green-600 bg-green-50', Admin: 'text-orange-600 bg-orange-50' };
+  const formatTanggal = (timestamp) => {
+    if (!timestamp) return '-';
+    try {
+      const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleString('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    } catch(e) { return '-'; }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Konfirmasi hapus */}
-      {deleteId && (
+      {confirmReset && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <Card className="max-w-sm w-full p-6 space-y-4 shadow-xl">
-            <h3 className="font-bold text-lg text-slate-800">Hapus Pengguna?</h3>
-            <p className="text-sm text-slate-500">Akun yang dihapus tidak bisa dikembalikan.</p>
+            <h3 className="font-bold text-lg text-slate-800">Reset Riwayat?</h3>
+            <p className="text-sm text-slate-500">Semua log aktivitas siswa akan dihapus permanen.</p>
             <div className="flex gap-3 justify-end">
-              <Button variant="secondary" onClick={() => setDeleteId(null)}>Batal</Button>
-              <Button variant="danger" onClick={async () => {
-                await deleteDoc(doc(getPublicCollection('users'), deleteId));
-                setDeleteId(null);
-                showToast('Pengguna dihapus.', 'success');
-              }}>Ya, Hapus</Button>
+              <Button variant="secondary" onClick={() => setConfirmReset(false)}>Batal</Button>
+              <Button variant="danger" onClick={handleResetRiwayat}>Ya, Reset</Button>
             </div>
           </Card>
         </div>
       )}
 
-      {/* Header */}
-      <Card className="shadow-lg bg-white/95">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">Manajemen Pengguna</h2>
-            <p className="text-sm text-slate-500 mt-1">Total: {users.length} pengguna terdaftar</p>
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Siswa Aktif Live */}
+        <Card className="lg:col-span-1 border-orange-200 shadow-md bg-white/95">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <h3 className="text-lg font-bold text-slate-800">Siswa Aktif (Live)</h3>
+            <span className="ml-auto text-xs text-slate-400">≤3 menit</span>
           </div>
-          <Button onClick={() => setIsAdding(!isAdding)} icon={isAdding ? X : Plus}>
-            {isAdding ? 'Batal' : 'Tambah Akun'}
-          </Button>
-        </div>
+          <div className="space-y-3">
+            {activeSessions.length === 0
+              ? <p className="text-sm text-slate-500 py-6 text-center">Tidak ada siswa aktif saat ini</p>
+              : activeSessions.map((session) => (
+                <div key={session.id} className="p-3 bg-orange-50 border border-orange-100 rounded-xl flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-sm text-slate-800">{session.userName}</p>
+                    <p className="text-xs text-orange-700 truncate max-w-[150px]">{session.type}</p>
+                  </div>
+                  <Activity size={16} className="text-emerald-500 animate-pulse shrink-0"/>
+                </div>
+              ))
+            }
+          </div>
+        </Card>
 
-        {/* Form tambah akun */}
-        {isAdding && (
-          <form onSubmit={handleTambah} className="mb-6 p-5 bg-orange-50 border border-orange-200 rounded-2xl space-y-4">
-            <h3 className="font-bold text-orange-900">➕ Buat Akun Guru / Admin</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input label="Nama Lengkap" placeholder="Contoh: Budi Santoso" value={form.nama} onChange={e => setForm({...form, nama: e.target.value})} required />
-              <Input label="Email" type="email" placeholder="contoh@email.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} required />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input label="Password" type="password" placeholder="Minimal 6 karakter" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Role</label>
-                <select
-                  value={form.role}
-                  onChange={e => setForm({...form, role: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm"
-                >
-                  <option value="Guru">Guru</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Menyimpan...' : '💾 Simpan Akun'}
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {/* Tabel pengguna */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="p-4 font-semibold text-slate-600">Nama</th>
-                <th className="p-4 font-semibold text-slate-600">Email</th>
-                <th className="p-4 font-semibold text-slate-600">Role</th>
-                <th className="p-4 text-right font-semibold text-slate-600">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {users.length === 0 && (
-                <tr><td colSpan={4} className="p-8 text-center text-slate-400">Belum ada pengguna.</td></tr>
-              )}
-              {users.map(u => (
-                <tr key={u.id} className="hover:bg-slate-50">
-                  <td className="p-4 font-semibold text-slate-800">{u.nama}</td>
-                  <td className="p-4 text-slate-500 text-xs">{u.email}</td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${roleColor[u.role] || 'text-slate-600 bg-slate-100'}`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
-                    <button onClick={() => setDeleteId(u.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
-                      <Trash2 size={16}/>
-                    </button>
-                  </td>
+        {/* Log Riwayat */}
+        <Card className="lg:col-span-2 shadow-md bg-white/95">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-slate-800">Log Riwayat Aktivitas</h3>
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition"
+            >
+              <Trash2 size={12}/> Reset Riwayat
+            </button>
+          </div>
+          <div className="overflow-auto max-h-72">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 sticky top-0">
+                <tr>
+                  <th className="p-3 font-semibold text-slate-600">Siswa</th>
+                  <th className="p-3 font-semibold text-slate-600">Aktivitas</th>
+                  <th className="p-3 font-semibold text-slate-600">Materi</th>
+                  <th className="p-3 font-semibold text-slate-600">Tanggal</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {activityLogs.length === 0 && (
+                  <tr><td colSpan={4} className="p-6 text-center text-slate-400">Belum ada riwayat aktivitas.</td></tr>
+                )}
+                {activityLogs.map(log => (
+                  <tr key={log.id} className="hover:bg-orange-50">
+                    <td className="p-3 font-semibold text-slate-800">{log.userName}</td>
+                    <td className="p-3">
+                      <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">{log.type}</span>
+                    </td>
+                    <td className="p-3 text-slate-600 text-xs">{log.itemName}</td>
+                    <td className="p-3 text-slate-400 text-xs whitespace-nowrap">{formatTanggal(log.timestamp)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
     </div>
+  );
+};
+
+const AdminUsers = () => {
+  const [users, setUsers] = useState([]);
+  useEffect(() => { return onSnapshot(query(getPublicCollection('users')), (snap) => setUsers(snap.docs.map(d => ({id: d.id, ...d.data()})))); }, []);
+  return (
+    <Card className="shadow-lg bg-white/95"><h2 className="text-2xl font-bold mb-6">Manajemen Pengguna</h2><table className="w-full text-left text-sm"><thead className="bg-slate-50"><tr><th className="p-4">Nama</th><th className="p-4">Email</th><th className="p-4">Role</th><th className="p-4 text-right">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">
+      {users.map(u => (<tr key={u.id} className="hover:bg-slate-50"><td className="p-4 font-semibold">{u.nama}</td><td className="p-4 text-slate-600">{u.email}</td><td className="p-4 font-bold text-orange-600">{u.role}</td><td className="p-4 text-right"><button onClick={() => deleteDoc(doc(getPublicCollection('users'), u.id))} className="text-rose-600 p-2"><Trash2 size={16}/></button></td></tr>))}
+    </tbody></table></Card>
   );
 };
 
@@ -1744,7 +1636,6 @@ const App = () => {
   const [materiList, setMateriList] = useState([]);
   const [materiLoading, setMateriLoading] = useState(true);
   const [hasilKuis, setHasilKuis] = useState([]);
-  const [bgStyle, setBgStyle] = useState('default');
 
   const showToast = (msg, type = 'info') => setToast({ msg, type });
 
@@ -1793,7 +1684,7 @@ const App = () => {
         )}
         {profile.role === 'Guru' && (
           <>
-            {view === 'dashboard' && <GuruDashboard />}
+            {view === 'dashboard' && <Card className="shadow-lg bg-white/95"><h2 className="text-2xl font-bold">Ringkasan Dasbor Guru</h2><p className="text-slate-500 mt-2">Selamat datang kembali, {profile.nama}. Gunakan menu navigasi sebelah kiri untuk mengelola materi, memindai dokumen AI, membagikan bank soal, atau membuat kuis untuk siswa.</p></Card>}
             {view === 'materi' && <KelolaMateri />}
             {view === 'kuis' && <KelolaKuis />}
             {view === 'bank_soal' && <BankSoalGuru />}
@@ -1804,7 +1695,6 @@ const App = () => {
           <>
             {view === 'dashboard' && <Card className="shadow-lg bg-white/95"><h2 className="text-2xl font-bold">Sistem Overview</h2><p className="text-slate-500 mt-2">Selamat datang Admin. Anda dapat memantau seluruh pengguna sistem AL Edu secara real-time.</p></Card>}
             {view === 'users' && <AdminUsers />}
-            {view === 'tampilan' && <AdminBackground />}
           </>
         )}
       </Layout>
